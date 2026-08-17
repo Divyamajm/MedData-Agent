@@ -126,11 +126,25 @@ with tab1:
             st.session_state.pending_clarification = True
             st.rerun()
             
+        elif "best" in prompt_lower or "top" in prompt_lower:
+            # TRIGGER THE BUTTON LOOP
+            st.session_state.pending_clarification = True
+            st.rerun()
+            
+        # --- NEW: HANDLING 'ALL' OR 'EVERY' INTENT ---
+        elif "all" in prompt_lower or "every" in prompt_lower or "list" in prompt_lower:
+            sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors"
+            explanation = "AI detected explicit user intent for the full dataset. Removed the standard 'LIMIT 5' constraint to return all active records."
+            df = pd.read_sql_query(sql, conn)
+            st.session_state.messages.append({"role": "assistant", "content": "📋 **DIRECTORY PROTOCOL:** Fetching the complete directory of our doctors.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
+            st.rerun()
+            
+        # --- STANDARD FALLBACK ---
         else:
             sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors LIMIT 5"
-            explanation = "Standard unstructured query executed."
+            explanation = "Generic query detected. Applied standard 'LIMIT 5' for UI safety."
             df = pd.read_sql_query(sql, conn)
-            st.session_state.messages.append({"role": "assistant", "content": "Executing standard database query...", "type": "data", "df": df, "sql": sql, "explanation": explanation})
+            st.session_state.messages.append({"role": "assistant", "content": "Here is a sample of 5 doctors from our database. Ask for 'all' to see the full list.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
             st.rerun()
 
 # ==========================================
