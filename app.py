@@ -31,17 +31,11 @@ def setup_ultimate_database():
         
         score = random.randint(70, 100)
         success = round(random.uniform(85.0, 99.9), 1)
+        distance = round(random.uniform(0.5, 30.0), 1)
+        fee = random.choice([0, 50, 100, 150, 250, 500])
         
-        # New Complex Metrics
-        distance = round(random.uniform(0.5, 30.0), 1) # Miles away
-        fee = random.choice([0, 50, 100, 150, 250, 500]) # 0 means fully covered/free
-        
-        # Scheduling Logic
         is_today = random.choice(['Yes', 'No'])
-        if is_today == 'Yes':
-            next_date = base_date.strftime('%Y-%m-%d')
-        else:
-            next_date = (base_date + timedelta(days=random.randint(1, 14))).strftime('%Y-%m-%d')
+        next_date = base_date.strftime('%Y-%m-%d') if is_today == 'Yes' else (base_date + timedelta(days=random.randint(1, 14))).strftime('%Y-%m-%d')
             
         dummy_data.append((i, name, specialty, surgery, success, score, distance, fee, is_today, next_date))
         
@@ -52,89 +46,104 @@ def setup_ultimate_database():
 conn = setup_ultimate_database()
 
 # ==========================================
-# 2. STREAMLIT UI CONFIGURATION
+# 2. STREAMLIT UI CONFIGURATION (UPGRADED)
 # ==========================================
 st.set_page_config(page_title="MedData AI Booking Agent", page_icon="🚑", layout="wide")
 
-st.markdown("<h1 style='color: #d9534f;'>🚑 MedData Smart Triage & Booking Agent</h1>", unsafe_allow_html=True)
-st.markdown("**Handles Emergencies, Scheduling, Fees, and Fallback Recommendations.**")
+st.markdown("<h1 style='color: #d9534f; text-align: center;'>🚑 MedData Enterprise Agent</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'><strong>Smart Triage Agent | Live Data Explorer | SQL Verification Sandbox</strong></p>", unsafe_allow_html=True)
 st.divider()
 
-with st.sidebar:
-    st.header("🗄️ Database Inspector")
-    if st.checkbox("Show all 200 Database Records"):
-        st.dataframe(pd.read_sql_query("SELECT * FROM Doctors", conn), use_container_width=True)
+# Create Three Professional UI Tabs
+tab1, tab2, tab3 = st.tabs(["💬 AI Triage Agent", "🗄️ Database Explorer", "⚡ Interviewer SQL Sandbox"])
 
 # ==========================================
-# 3. CHAT STATE MANAGEMENT
+# TAB 1: THE AI AGENT
 # ==========================================
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hello. I am the MedData Triage Agent. Are you experiencing an emergency, looking to book an appointment, or searching for the most affordable care?"}]
-if "clarification_context" not in st.session_state:
-    st.session_state.clarification_context = None
+with tab1:
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "Hello. I am the MedData Triage Agent. Are you experiencing an emergency, looking to book an appointment, or searching for affordable care?"}]
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    # Display chat messages
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-# ==========================================
-# 4. ADVANCED AGENT ROUTING LOGIC
-# ==========================================
-if prompt := st.chat_input("E.g., 'I have an emergency' or 'Find a cheap doctor'"):
-    
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-        
-    with st.chat_message("assistant"):
-        prompt_lower = prompt.lower()
-        explanation = ""
-        sql = ""
-        
-        # --- SCENARIO 1: EMERGENCY (GEOSPATIAL + TIME) ---
-        if "emergency" in prompt_lower or "urgent" in prompt_lower:
-            st.markdown("🚨 **EMERGENCY PROTOCOL ACTIVATED:** Locating the absolute closest doctors who are available *right now*.")
-            sql = "SELECT name, specialty, distance_miles, is_available_today, consultation_fee FROM Doctors WHERE is_available_today = 'Yes' ORDER BY distance_miles ASC LIMIT 3"
-            explanation = "AI detected 'emergency'. Bypassed standard metrics to filter strictly by immediate availability (today) and sorted by lowest distance in miles."
+    # Chat Input
+    if prompt := st.chat_input("Ask the MedData Agent..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
             
-        # --- SCENARIO 2: FINANCIAL/AFFORDABILITY ---
-        elif "cheap" in prompt_lower or "free" in prompt_lower or "lowest fee" in prompt_lower:
-            st.markdown("💰 **FINANCIAL ROUTING:** Finding the most affordable care options for you.")
-            sql = "SELECT name, specialty, consultation_fee, satisfaction_score, distance_miles FROM Doctors ORDER BY consultation_fee ASC, satisfaction_score DESC LIMIT 5"
-            explanation = "AI detected financial sensitivity. Sorted database primarily by lowest 'consultation_fee', using 'satisfaction_score' as a secondary tie-breaker for quality."
+        with st.chat_message("assistant"):
+            prompt_lower = prompt.lower()
+            explanation = ""
+            sql = ""
+            
+            if "emergency" in prompt_lower or "urgent" in prompt_lower:
+                st.markdown("🚨 **EMERGENCY PROTOCOL:** Locating the absolute closest doctors available *right now*.")
+                sql = "SELECT name, specialty, distance_miles, is_available_today, consultation_fee FROM Doctors WHERE is_available_today = 'Yes' ORDER BY distance_miles ASC LIMIT 3"
+                explanation = "Bypassed standard metrics to filter strictly by immediate availability (today) and sorted by lowest distance in miles."
+                
+            elif "cheap" in prompt_lower or "free" in prompt_lower or "fee" in prompt_lower:
+                st.markdown("💰 **FINANCIAL ROUTING:** Finding the most affordable care options.")
+                sql = "SELECT name, specialty, consultation_fee, satisfaction_score, distance_miles FROM Doctors ORDER BY consultation_fee ASC, satisfaction_score DESC LIMIT 5"
+                explanation = "Sorted primarily by lowest 'consultation_fee', using 'satisfaction_score' as a secondary tie-breaker."
 
-        # --- SCENARIO 3: UNAVAILABLE FALLBACK / RECOMMENDATION ---
-        elif "book" in prompt_lower or "appointment" in prompt_lower:
-            if "cardiologist" in prompt_lower or "heart" in prompt_lower:
-                st.markdown("📅 **SCHEDULING PROTOCOL:** Checking Cardiology availability for today...")
-                # Simulate checking for a specific doctor and falling back to others
-                st.markdown("⚠️ *Note: Dr. Smith (Cardiology) is fully booked today. However, the system has automatically found 3 other top-rated Cardiologists available immediately:*")
-                sql = "SELECT name, specialty, is_available_today, next_available_date, satisfaction_score FROM Doctors WHERE specialty = 'Cardiology' AND is_available_today = 'Yes' AND name != 'Dr. Smith' ORDER BY satisfaction_score DESC LIMIT 3"
-                explanation = "AI attempted to book a specific specialty. Simulated a 'fully booked' scenario and successfully executed a fallback recommendation query to provide alternate doctors in the same specialty."
+            elif "book" in prompt_lower or "appointment" in prompt_lower:
+                st.markdown("📅 **SCHEDULING PROTOCOL:** Here are our earliest available appointments.")
+                sql = "SELECT name, specialty, next_available_date, consultation_fee, satisfaction_score FROM Doctors ORDER BY next_available_date ASC LIMIT 5"
+                explanation = "Sorted entire database chronologically by 'next_available_date'."
+
+            elif "best" in prompt_lower:
+                st.markdown("⚠️ **Ambiguity Detected:** By 'best', do you mean the doctor with the **highest satisfaction score**, or the **highest surgical success rate**?")
+                sql = "SELECT * FROM Doctors LIMIT 0" 
+                explanation = "Intercepted ambiguous human logic. Awaiting clarification."
+                
             else:
-                st.markdown("📅 **SCHEDULING PROTOCOL:** Here are our earliest available appointments across all specialties.")
-                sql = "SELECT name, specialty, next_available_date, consultation_fee FROM Doctors ORDER BY next_available_date ASC LIMIT 5"
-                explanation = "AI sorted entire database chronologically by 'next_available_date' to show the soonest possible appointments."
+                st.markdown("Executing standard database query...")
+                sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors LIMIT 5"
+                explanation = "Standard unstructured query executed."
 
-        # --- SCENARIO 4: THE ORIGINAL AMBIGUITY LOOP ---
-        elif "best" in prompt_lower:
-            st.markdown("⚠️ **Ambiguity Detected:** By 'best', do you mean the doctor with the **highest satisfaction score**, or the **highest surgical success rate**?")
-            sql = "SELECT * FROM Doctors LIMIT 0" # Return empty just to pause
-            explanation = "Intercepted ambiguous human logic. Awaiting clarification."
-            
-        # --- FALLBACK ---
-        else:
-            st.markdown("Executing standard database query...")
-            sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors LIMIT 5"
-            explanation = "Standard unstructured query executed."
+            if sql and "LIMIT 0" not in sql:
+                df = pd.read_sql_query(sql, conn)
+                st.dataframe(df, use_container_width=True)
+                
+                with st.expander("🔍 Explainability Audit Trail"):
+                    st.write(f"**AI Logic Translation:** {explanation}")
+                    st.code(sql, language="sql")
 
-        # --- EXECUTE AND SHOW PROOF ---
-        if sql and "LIMIT 0" not in sql:
-            df = pd.read_sql_query(sql, conn)
-            st.dataframe(df, use_container_width=True)
-            
-            with st.expander("🔍 Interviewer Proof: AI Decision Logic & SQL Audit"):
-                st.write(f"**1. AI Logic Translation:** {explanation}")
-                st.write("**2. Raw SQL Executed:**")
-                st.code(sql, language="sql")
-                st.write("**3. Verification:** Data generated dynamically from 200-record SQLite mock server.")
+# ==========================================
+# TAB 2: THE DATABASE EXPLORER
+# ==========================================
+with tab2:
+    st.markdown("### 🗄️ Enterprise Data Lake (Mock View)")
+    st.write("This tab allows stakeholders to view the entire ground-truth dataset that powers the AI Agent.")
+    
+    # Show some cool high-level metrics
+    col1, col2, col3, col4 = st.columns(4)
+    all_df = pd.read_sql_query("SELECT * FROM Doctors", conn)
+    
+    col1.metric("Total Active Doctors", f"{len(all_df)}")
+    col2.metric("Specialties Represented", f"{all_df['specialty'].nunique()}")
+    col3.metric("Avg Consultation Fee", f"${round(all_df['consultation_fee'].mean(), 2)}")
+    col4.metric("Available Today", f"{len(all_df[all_df['is_available_today'] == 'Yes'])}")
+    
+    st.dataframe(all_df, use_container_width=True, height=500)
+
+# ==========================================
+# TAB 3: THE INTERVIEWER SQL SANDBOX
+# ==========================================
+with tab3:
+    st.markdown("### ⚡ Live SQL Sandbox")
+    st.write("Verify the AI's logic or test my SQL skills by running custom queries directly against the live mock database.")
+    
+    custom_sql = st.text_area("Write your SQL Query here:", value="SELECT specialty, COUNT(*) as Total_Doctors, AVG(consultation_fee) as Avg_Fee FROM Doctors GROUP BY specialty;")
+    
+    if st.button("▶ Run Custom Query"):
+        try:
+            sandbox_df = pd.read_sql_query(custom_sql, conn)
+            st.success("Query Executed Successfully!")
+            st.dataframe(sandbox_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"SQL Error: {e}")
