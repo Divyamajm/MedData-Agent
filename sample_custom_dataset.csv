@@ -1,0 +1,41 @@
+Hospital_Name,City,State,Total_Beds,ICU_Beds_Available,NABH_Accredited,Avg_OPD_Fee_INR,Patient_Rating,Emergency_Response_Mins,Specialty_Strength,Latitude,Longitude
+Apollo Hospital Greams Road,Chennai,Tamil Nadu,560,34,Yes,1200,4.8,8,Cardiology & Organ Transplant,13.0604,80.2496
+Fortis Memorial Research Institute,Gurugram,Delhi-NCR,450,28,Yes,1500,4.7,10,Oncology & Neurosciences,28.4595,77.0725
+Medanta The Medicity,Gurugram,Delhi-NCR,1250,85,Yes,1400,4.9,7,Cardiology & Cardiac Surgery,28.4390,77.0428
+Kokilaben Dhirubhai Ambani Hospital,Mumbai,Maharashtra,750,42,Yes,1600,4.8,9,Robotic Surgery & Neurology,19.1311,72.8258
+Manipal Hospital Old Airport Road,Bengaluru,Karnataka,600,38,Yes,1100,4.7,11,Pediatrics & Orthopedics,12.9592,77.6568
+Max Super Speciality Hospital Saket,New Delhi,Delhi-NCR,530,36,Yes,1500,4.8,8,Cardiac Sciences & Oncology,28.5273,77.2140
+Narayana Health City,Bengaluru,Karnataka,1400,92,Yes,800,4.9,6,Pediatric Cardiology & Cardiac,12.8016,77.6974
+Tata Memorial Hospital,Mumbai,Maharashtra,600,30,Yes,500,4.9,15,Cancer Research & Oncology,19.0033,72.8427
+CMC Vellore,Vellore,Tamil Nadu,1700,110,Yes,650,4.9,5,Hematology & Gastroenterology,12.9246,79.1350
+Sir Ganga Ram Hospital,New Delhi,Delhi-NCR,675,45,Yes,1200,4.6,12,Nephrology & Renal Transplant,28.6385,77.1895
+Lilavati Hospital and Research Centre,Mumbai,Maharashtra,314,24,Yes,1800,4.6,10,Interventional Cardiology,19.0519,72.8295
+Aster CMI Hospital,Bengaluru,Karnataka,500,32,Yes,1100,4.7,9,Liver Transplant & Critical Care,13.0583,77.5925
+KIMS Hospitals Secunderabad,Hyderabad,Telangana,1000,68,Yes,950,4.7,8,Neurology & Organ Transplant,17.4338,78.4862
+Yashoda Hospital Somajiguda,Hyderabad,Telangana,800,55,Yes,1000,4.8,7,Pulmonology & Oncology,17.4243,78.4578
+MIOT International,Chennai,Tamil Nadu,1000,64,Yes,1100,4.7,10,Orthopedics & Joint Replacement,13.0232,80.1770
+PD Hinduja Hospital,Mumbai,Maharashtra,400,28,Yes,1600,4.7,11,Multi-Specialty & Diagnostics,19.0330,72.8397
+Gleneagles Global Health City,Chennai,Tamil Nadu,1000,58,Yes,1000,4.6,12,Hepatology & Multi-Organ,12.9015,80.2005
+Amrita Hospital,Faridabad,Delhi-NCR,2600,150,Yes,900,4.8,6,Pediatric Genetics & Robotic,28.4089,77.3478
+Ruby Hall Clinic,Pune,Maharashtra,550,36,Yes,950,4.6,12,Cardiology & Neurology,18.5314,73.8784
+Je Hangir Hospital,Pune,Maharashtra,350,22,Yes,900,4.5,14,Trauma Care & Pediatrics,18.5289,73.8742
+Apollo Health City Jubilee Hills,Hyderabad,Telangana,850,56,Yes,1300,4.8,8,Emergency & Organ Transplant,17.4239,78.4111
+Fortis Hospital Bannerghatta Road,Bengaluru,Karnataka,400,26,Yes,1250,4.7,10,Orthopedics & Minimal Access,12.8943,77.5983
+Nanavati Max Super Speciality Hospital,Mumbai,Maharashtra,350,25,Yes,1500,4.6,11,Gastrointestinal Surgery,19.0968,72.8406
+Artemis Hospital,Gurugram,Delhi-NCR,400,30,Yes,1400,4.7,9,Cardiovascular Surgery,28.4357,77.0782
+Care Hospital Banjara Hills,Hyderabad,Telangana,435,32,Yes,1050,4.6,10,Cardiology & Emergency,17.4162,78.4485
+SIMS Hospital Vadapalani,Chennai,Tamil Nadu,345,25,Yes,1000,4.7,9,Neurosurgery & Joint Replacement,13.0524,80.2088
+Apollo Hospitals Seshadripuram,Bengaluru,Karnataka,200,18,Yes,1150,4.6,11,General Medicine & Dialysis,12.9915,77.5755
+BLK-Max Super Speciality Hospital,New Delhi,Delhi-NCR,650,48,Yes,1450,4.7,9,Bone Marrow Transplant & Oncology,28.6441,77.1793
+Manipal Hospital Whitefield,Bengaluru,Karnataka,280,22,Yes,1200,4.6,12,Critical Care & Maternity,12.9866,77.7340
+MGM Healthcare,Chennai,Tamil Nadu,400,35,Yes,1100,4.8,8,Heart & Lung Transplant,13.0722,80.2238
+Continental Hospitals Gachibowli,Hyderabad,Telangana,750,50,Yes,1200,4.7,9,Comprehensive Cancer Care,17.4332,78.3444
+BGS Gleneagles Global Hospital,Bengaluru,Karnataka,500,35,Yes,850,4.6,13,Biliary Sciences & Surgery,12.9019,77.5020
+Columbia Asia Referral Hospital Yeshwanthpur,Bengaluru,Karnataka,160,16,Yes,1300,4.5,12,Urology & Bariatric,13.0139,77.5544
+Sunshine Hospitals Secunderabad,Hyderabad,Telangana,350,25,Yes,900,4.6,11,Gastroenterology & Trauma,17.4428,78.4983
+Fortis Escorts Heart Institute Okhla,New Delhi,Delhi-NCR,310,26,Yes,1600,4.9,7,Pediatric Interventional Cardiology,28.5606,77.2806
+Deenanath Mangeshkar Hospital,Pune,Maharashtra,900,60,Yes,750,4.8,8,Joint Replacement & Oncology,18.5018,73.8341
+Apollo Speciality Hospital OMR,Chennai,Tamil Nadu,260,20,Yes,1050,4.6,10,Neurology & Emergency Care,12.9352,80.2312
+Fortis Hospital Mulund,Mumbai,Maharashtra,350,26,Yes,1400,4.7,10,Multiorgan Transplant & Cardiac,19.1678,72.9431
+Manipal Hospital Dwarka,New Delhi,Delhi-NCR,380,28,Yes,1350,4.7,9,Robotic Joint Replacement,28.5833,77.0601
+Kauvery Hospital Alwarpet,Chennai,Tamil Nadu,200,18,Yes,950,4.7,10,Geriatric Care & Cardiology,13.0368,80.2520
