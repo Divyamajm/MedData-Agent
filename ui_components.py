@@ -264,59 +264,8 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
             st.dataframe(df, hide_index=True)
 
 
-def render_geo_map(data: List[Dict[str, Any]], domain: DomainType = DomainType.HEALTHCARE):
-    """Renders interactive latitude/longitude scatter map with city-level zoom and precision pins."""
-    if not data:
-        st.warning("No data points available to render on the map.")
-        return
-
-    # Metro City Center Bounding & Lat/Long Limits
-    CITY_CENTERS = {
-        "🇮🇳 All India (National Overview)": {"lat_min": 8.0, "lat_max": 35.0, "lon_min": 68.0, "lon_max": 97.0, "zoom": 4},
-        "🏙️ Bengaluru (Silicon Valley)": {"lat_min": 12.75, "lat_max": 13.15, "lon_min": 77.45, "lon_max": 77.85, "zoom": 11},
-        "🌊 Mumbai (Financial Capital)": {"lat_min": 18.85, "lat_max": 19.30, "lon_min": 72.75, "lon_max": 73.05, "zoom": 11},
-        "🏛️ Delhi-NCR (Capital Region)": {"lat_min": 28.35, "lat_max": 28.75, "lon_min": 76.95, "lon_max": 77.45, "zoom": 11},
-        "👑 Hyderabad (Cyberabad)": {"lat_min": 17.30, "lat_max": 17.55, "lon_min": 78.25, "lon_max": 78.55, "zoom": 11},
-        "🌴 Chennai (Coastal Tech Hub)": {"lat_min": 12.85, "lat_max": 13.18, "lon_min": 80.10, "lon_max": 80.32, "zoom": 11}
-    }
-
-    col_map1, col_map2 = st.columns([1, 3])
-    selected_city_focus = col_map1.selectbox(
-        "🗺️ Focus Metro Radar:",
-        list(CITY_CENTERS.keys()),
-        index=0
-    )
-
-    # Extract coordinates and sanitize
-    coords = []
-    for item in data:
-        if "latitude" in item and "longitude" in item and item["latitude"] is not None and item["longitude"] is not None:
-            lat = float(item["latitude"])
-            lon = float(item["longitude"])
-            city_filter = CITY_CENTERS[selected_city_focus]
-
-            if city_filter["lat_min"] <= lat <= city_filter["lat_max"] and city_filter["lon_min"] <= lon <= city_filter["lon_max"]:
-                coords.append({
-                    "lat": lat,
-                    "lon": lon,
-                    "Name": item.get("name") or item.get("title") or item.get("College_Name"),
-                    "Location / Details": item.get("neighborhood") or item.get("specialty") or item.get("City"),
-                    "Price / Metric": f"₹{item.get('price_per_month', item.get('consultation_fee', item.get('Annual_Fees_INR', 'N/A'))):,}" if isinstance(item.get('price_per_month', item.get('consultation_fee', item.get('Annual_Fees_INR'))), (int, float)) else "N/A"
-                })
-
-    if coords:
-        map_df = pd.DataFrame(coords)
-        col_map2.map(map_df[["lat", "lon"]], zoom=CITY_CENTERS[selected_city_focus]["zoom"])
-        st.caption(f"Displaying **{len(coords)}** verified Indian geolocation points in `{selected_city_focus}`.")
-
-        with st.expander(f"📍 View Geolocation Point Directory ({len(coords)} Locations)", expanded=False):
-            st.dataframe(map_df[["Name", "Location / Details", "Price / Metric", "lat", "lon"]], hide_index=True)
-    else:
-        st.info(f"No records found within the bounding coordinates of **{selected_city_focus}**. Try selecting *All India* to view all mapped points.")
-
-
-def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = DomainType.HEALTHCARE):
-    """Renders a side-by-side head-to-head comparison table for selected items."""
+def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = DomainType.HEALTHCARE, custom_title_col: Optional[str] = None):
+    """Renders a side-by-side head-to-head comparison table for selected items across Healthcare, Real Estate, or Any Imported CSV."""
     if not items:
         st.info("Select 2 or more items to view the side-by-side comparison matrix.")
         return
@@ -324,33 +273,72 @@ def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = D
     if domain == DomainType.HEALTHCARE:
         comp_data = []
         for d in items:
+            fee_val = d.get('consultation_fee', 0)
+            fee_str = "FREE (₹0)" if fee_val == 0 else f"₹{fee_val:,}"
             comp_data.append({
                 "Doctor Name": d.get("name"),
                 "Specialty": d.get("specialty"),
                 "Surgery Success Rate": f"{d.get('surgery_success_rate')}%",
                 "Satisfaction Score": f"{d.get('satisfaction_score')}/100",
-                "Consultation Fee": "FREE" if d.get("consultation_fee") == 0 else f"${d.get('consultation_fee')}",
-                "Distance (miles)": f"{d.get('distance_miles')} mi",
-                "Availability": "Today (Yes)" if d.get("is_available_today") == "Yes" else d.get("next_available_date")
+                "Consultation Fee": fee_str,
+                "Distance (km)": f"{d.get('distance_miles')} km",
+                "Availability": "🟢 Today (Yes)" if d.get("is_available_today") == "Yes" else f"📅 Next: {d.get('next_available_date')}"
             })
         comp_df = pd.DataFrame(comp_data).set_index("Doctor Name").T
-        st.dataframe(comp_df)
-    else:
+        st.dataframe(comp_df, height=350)
+    elif domain == DomainType.REAL_ESTATE:
         comp_data = []
         for p in items:
+            rent_val = p.get('price_per_month', 0)
             comp_data.append({
                 "Property": p.get("title"),
+                "City": p.get("city", "Bengaluru"),
                 "Neighborhood": p.get("neighborhood"),
-                "Rent": f"${p.get('price_per_month')}/mo",
+                "Monthly Rent": f"₹{rent_val:,}/mo",
                 "Livability Score": f"{p.get('livability_score')}/100",
-                "Crime Index": f"{p.get('crime_index_score')}/100",
-                "School Rating": f"{p.get('school_rating')}/10",
-                "Hospital Distance": f"{p.get('hospital_dist_miles')} mi",
-                "Transit Distance": f"{p.get('transit_dist_miles')} mi",
-                "Size": f"{p.get('bedrooms')} BHK ({p.get('sqft')} sqft)"
+                "Crime Index": f"{p.get('crime_index_score')}/100 (Lower is Safer)",
+                "CBSE/ICSE Schools": f"{p.get('school_rating')}/10",
+                "Hospital Distance": f"{p.get('hospital_dist_miles')} km",
+                "Metro Transit": f"{p.get('transit_dist_miles')} km",
+                "Configuration": f"{p.get('bedrooms')} BHK / {p.get('bathrooms')} Bath ({p.get('sqft')} sqft)"
             })
         comp_df = pd.DataFrame(comp_data).set_index("Property").T
-        st.dataframe(comp_df)
+        st.dataframe(comp_df, height=400)
+    else:
+        # Dynamic Dataset / Imported CSV File Comparison
+        comp_data = []
+        first_item = items[0]
+        id_col = custom_title_col
+        if not id_col:
+            for candidate in ["Hospital_Name", "College_Name", "Name", "Title", "name", "title", "id", list(first_item.keys())[0]]:
+                if candidate in first_item:
+                    id_col = candidate
+                    break
+
+        for item in items:
+            row_dict = {}
+            for k, v in item.items():
+                if k.lower() in ["latitude", "longitude", "id"]:
+                    continue
+                # Format numbers nicely
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    if "fee" in k.lower() or "price" in k.lower() or "rent" in k.lower() or "salary" in k.lower():
+                        row_dict[k.replace("_", " ").title()] = f"₹{int(v):,}" if v >= 100 else f"₹{v:.2f}"
+                    elif "rating" in k.lower() or "score" in k.lower():
+                        row_dict[k.replace("_", " ").title()] = f"⭐ {v}"
+                    elif "rate" in k.lower() or "pct" in k.lower() or "percent" in k.lower():
+                        row_dict[k.replace("_", " ").title()] = f"{v}%"
+                    else:
+                        row_dict[k.replace("_", " ").title()] = f"{int(v):,}" if isinstance(v, int) else f"{v}"
+                else:
+                    row_dict[k.replace("_", " ").title()] = str(v)
+            comp_data.append(row_dict)
+
+        title_display = id_col.replace("_", " ").title() if id_col else list(comp_data[0].keys())[0]
+        comp_df = pd.DataFrame(comp_data)
+        if title_display in comp_df.columns:
+            comp_df = comp_df.set_index(title_display).T
+        st.dataframe(comp_df, height=450)
 
 
 def generate_ics_calendar(

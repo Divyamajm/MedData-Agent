@@ -157,13 +157,12 @@ with st.sidebar:
 # ==========================================
 # 3. MASTER APPLICATION NAVIGATION TABS
 # ==========================================
-tab_chat, tab_map, tab_comp, tab_sched, tab_ins, tab_dynamic, tab_lake, tab_sql, tab_tests = st.tabs([
+tab_chat, tab_comp, tab_dynamic, tab_sched, tab_ins, tab_lake, tab_sql, tab_tests = st.tabs([
     "💬 AI Discovery",
-    "🗺️ Geo-Spatial Radar",
     "⚖️ Comparison Matrix",
+    "📂 Dynamic Auto-Analyzer",
     "📅 Smart Scheduler",
     "💳 Insurance Estimator",
-    "📂 Dynamic Auto-Analyzer",
     "🗄️ Data Lake Explorer",
     "⚡ AST SQL Sandbox",
     "🧪 Verification Suite"
@@ -281,70 +280,83 @@ with tab_chat:
 
 
 # ==========================================
-# TAB 2: 🗺️ GEO-SPATIAL MAP & PROXIMITY RADAR
-# ==========================================
-with tab_map:
-    st.markdown("#### 🗺️ Interactive Indian Geo-Spatial Radar & Precision Map")
-    st.caption("Visual scatter map plotting verified coordinates across Indian Metros (Bengaluru, Mumbai, Delhi-NCR, Hyderabad, Chennai, Pune).")
-
-    map_col1, map_col2 = st.columns([1, 3])
-    with map_col1:
-        map_domain = st.selectbox(
-            "Select Map Layer:", 
-            [
-                "🏥 MedData Verified Physicians (200 Doctors)", 
-                "🏡 UrbanLocate Properties (50 Listings across 5 Metros)",
-                "🎓 NIRF Top 200 Engineering Colleges"
-            ]
-        )
-
-    with map_col2:
-        conn = get_connection()
-        if "Physicians" in map_domain:
-            c = conn.cursor()
-            c.execute("SELECT name, specialty, consultation_fee, satisfaction_score, latitude, longitude FROM Doctors")
-            map_data = [dict(r) for r in c.fetchall()]
-            render_geo_map(map_data, domain=DomainType.HEALTHCARE)
-        elif "Colleges" in map_domain:
-            colleges_df = get_sample_dataset("Colleges")
-            map_data = colleges_df.to_dict(orient="records")
-            render_geo_map(map_data, domain=DomainType.DYNAMIC_DATASET)
-        else:
-            c = conn.cursor()
-            c.execute("SELECT title, city, neighborhood, property_type, price_per_month, livability_score, latitude, longitude FROM Properties")
-            map_data = [dict(r) for r in c.fetchall()]
-            render_geo_map(map_data, domain=DomainType.REAL_ESTATE)
-        conn.close()
-
-
-# ==========================================
-# TAB 3: ⚖️ HEAD-TO-HEAD COMPARISON MATRIX
+# TAB 2: ⚖️ HEAD-TO-HEAD COMPARISON MATRIX
 # ==========================================
 with tab_comp:
     st.markdown("#### ⚖️ Side-by-Side Head-to-Head Comparison Matrix")
-    st.caption("Select 2 to 4 entities to compare their performance, price, quality, and proximity side-by-side.")
+    st.caption("Select 2 to 4 entities to compare their performance, pricing, metrics, and quality side-by-side.")
 
-    conn = get_connection()
-    c = conn.cursor()
-
-    comp_choice = st.radio("Domain to Compare", ["Doctors & Physicians", "Housing & Neighborhoods"], horizontal=True)
+    comp_choice = st.radio(
+        "Select Dataset to Compare Entities Side-by-Side:", 
+        ["🏥 MedData Doctors (200 Records)", "🏡 UrbanLocate Properties (50 Listings)", "📂 Imported CSV / Custom Dataset (e.g. Hospitals / Colleges)"], 
+        horizontal=True
+    )
 
     if "Doctors" in comp_choice:
-        c.execute("SELECT id, name, specialty, primary_surgery, surgery_success_rate, satisfaction_score, distance_miles, consultation_fee, is_available_today, next_available_date FROM Doctors LIMIT 50")
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT id, name, specialty, primary_surgery, surgery_success_rate, satisfaction_score, distance_miles, consultation_fee, is_available_today, next_available_date FROM Doctors")
         all_docs = [dict(r) for r in c.fetchall()]
+        conn.close()
         doc_names = [d["name"] for d in all_docs]
         selected_names = st.multiselect("Select Doctors to Compare:", doc_names, default=doc_names[:3] if len(doc_names) >= 3 else doc_names)
         selected_items = [d for d in all_docs if d["name"] in selected_names]
         render_comparison_matrix(selected_items, domain=DomainType.HEALTHCARE)
-    else:
+    elif "Properties" in comp_choice:
+        conn = get_connection()
+        c = conn.cursor()
         c.execute("SELECT id, title, city, neighborhood, property_type, price_per_month, bedrooms, bathrooms, sqft, crime_index_score, school_rating, hospital_dist_miles, transit_dist_miles, livability_score FROM Properties")
         all_props = [dict(r) for r in c.fetchall()]
+        conn.close()
         prop_titles = [p["title"] for p in all_props]
         selected_titles = st.multiselect("Select Properties to Compare:", prop_titles, default=prop_titles[:3] if len(prop_titles) >= 3 else prop_titles)
         selected_items = [p for p in all_props if p["title"] in selected_titles]
         render_comparison_matrix(selected_items, domain=DomainType.REAL_ESTATE)
+    else:
+        # Dynamic Dataset / CSV Comparison
+        st.markdown("##### 📂 Compare Records from Any CSV File Side-by-Side")
+        
+        csv_source = st.radio(
+            "CSV Source:",
+            ["📁 Load 'sample_custom_dataset.csv' (Indian Super-Specialty Hospitals)", "🎓 Sample NIRF Top Colleges", "📤 Upload Custom CSV File"],
+            horizontal=True
+        )
+        
+        custom_df = None
+        if "sample_custom_dataset.csv" in csv_source:
+            if os.path.exists("sample_custom_dataset.csv"):
+                custom_df = pd.read_csv("sample_custom_dataset.csv")
+        elif "NIRF" in csv_source:
+            custom_df = get_sample_dataset("Colleges")
+        else:
+            uploaded_cmp_file = st.file_uploader("Upload CSV to Compare Entities:", type=["csv"], key="cmp_csv_uploader")
+            if uploaded_cmp_file:
+                custom_df = pd.read_csv(uploaded_cmp_file)
 
-    conn.close()
+        if custom_df is not None and not custom_df.empty:
+            id_col = None
+            for cand in ["Hospital_Name", "College_Name", "Name", "Title", "name", "title", "id", custom_df.columns[0]]:
+                if cand in custom_df.columns:
+                    id_col = cand
+                    break
+            
+            if not id_col:
+                id_col = custom_df.columns[0]
+
+            entity_options = custom_df[id_col].astype(str).tolist()
+            selected_entities = st.multiselect(
+                f"Select Entities to Compare Side-by-Side ({id_col}):", 
+                entity_options, 
+                default=entity_options[:3] if len(entity_options) >= 3 else entity_options
+            )
+            
+            if selected_entities:
+                filtered_cmp = custom_df[custom_df[id_col].astype(str).isin(selected_entities)]
+                render_comparison_matrix(filtered_cmp.to_dict(orient="records"), domain=DomainType.DYNAMIC_DATASET, custom_title_col=id_col)
+            else:
+                st.info("Select at least 2 entities above to view their side-by-side comparison.")
+        else:
+            st.info("Upload a CSV file or select a sample dataset above to compare entities side-by-side.")
 
 
 # ==========================================
