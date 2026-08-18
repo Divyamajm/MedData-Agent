@@ -57,7 +57,7 @@ st.divider()
 tab1, tab2, tab3 = st.tabs(["💬 AI Triage Agent", "🗄️ Database Explorer", "⚡ Interviewer SQL Sandbox"])
 
 # ==========================================
-# TAB 1: THE AI AGENT (NOW WITH BUTTONS)
+# TAB 1: THE AI AGENT 
 # ==========================================
 with tab1:
     # Initialize Chat History and State
@@ -107,39 +107,55 @@ with tab1:
         st.session_state.messages.append({"role": "user", "content": prompt, "type": "text"})
         prompt_lower = prompt.lower()
         
-        if "emergency" in prompt_lower or "urgent" in prompt_lower:
-            sql = "SELECT name, specialty, distance_miles, is_available_today, consultation_fee FROM Doctors WHERE is_available_today = 'Yes' ORDER BY distance_miles ASC LIMIT 3"
-            explanation = "Bypassed standard metrics to filter strictly by immediate availability (today) and sorted by lowest distance in miles."
+        # --- 1. LOCATION / EMERGENCY ROUTING ---
+        if any(word in prompt_lower for word in ["emergency", "urgent", "shortest", "distance", "closest", "near"]):
+            sql = "SELECT name, specialty, distance_miles, is_available_today, consultation_fee FROM Doctors ORDER BY distance_miles ASC LIMIT 5"
+            explanation = "AI detected intent for proximity/distance. Sorted database by 'distance_miles' in ascending order."
             df = pd.read_sql_query(sql, conn)
-            st.session_state.messages.append({"role": "assistant", "content": "🚨 **EMERGENCY PROTOCOL:** Locating the absolute closest doctors available *right now*.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
+            st.session_state.messages.append({"role": "assistant", "content": "📍 **LOCATION PROTOCOL:** Finding the closest doctors to the hospital.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
             st.rerun()
             
-        elif "cheap" in prompt_lower or "free" in prompt_lower or "fee" in prompt_lower:
+        # --- 2. FINANCIAL ROUTING ---
+        elif any(word in prompt_lower for word in ["cheap", "free", "fee", "affordable"]):
             sql = "SELECT name, specialty, consultation_fee, satisfaction_score, distance_miles FROM Doctors ORDER BY consultation_fee ASC, satisfaction_score DESC LIMIT 5"
             explanation = "Sorted primarily by lowest 'consultation_fee', using 'satisfaction_score' as a secondary tie-breaker."
             df = pd.read_sql_query(sql, conn)
             st.session_state.messages.append({"role": "assistant", "content": "💰 **FINANCIAL ROUTING:** Finding the most affordable care options.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
             st.rerun()
 
+        # --- 3. AMBIGUITY INTERCEPTOR ---
         elif "best" in prompt_lower or "top" in prompt_lower:
             # TRIGGER THE BUTTON LOOP
             st.session_state.pending_clarification = True
             st.rerun()
             
-        elif "best" in prompt_lower or "top" in prompt_lower:
-            # TRIGGER THE BUTTON LOOP
-            st.session_state.pending_clarification = True
-            st.rerun()
+        # --- 4. DIRECTORY INTENT & ENTITY EXTRACTION ---
+        elif any(word in prompt_lower for word in ["all", "every", "list"]):
             
-        # --- NEW: HANDLING 'ALL' OR 'EVERY' INTENT ---
-        elif "all" in prompt_lower or "every" in prompt_lower or "list" in prompt_lower:
-            sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors"
-            explanation = "AI detected explicit user intent for the full dataset. Removed the standard 'LIMIT 5' constraint to return all active records."
+            # Scan the sentence for specific specialties
+            specialties = ['cardiology', 'neurology', 'orthopedics', 'pediatrics', 'emergency']
+            found_specialty = None
+            
+            for spec in specialties:
+                if spec in prompt_lower:
+                    found_specialty = spec.capitalize() # Capitalize to match database format
+                    break
+            
+            # Dynamically build the SQL based on what the AI found
+            if found_specialty:
+                sql = f"SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors WHERE specialty = '{found_specialty}'"
+                explanation = f"AI detected 'all' intent AND extracted an entity ('{found_specialty}'). Injected a strict WHERE clause to filter the directory."
+                msg_content = f"📋 **DIRECTORY PROTOCOL:** Fetching all our **{found_specialty}** specialists."
+            else:
+                sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors"
+                explanation = "AI detected intent for the full dataset but no specific specialty. Removed the 'LIMIT 5' constraint to show everyone."
+                msg_content = "📋 **DIRECTORY PROTOCOL:** Fetching the complete directory of all doctors."
+            
             df = pd.read_sql_query(sql, conn)
-            st.session_state.messages.append({"role": "assistant", "content": "📋 **DIRECTORY PROTOCOL:** Fetching the complete directory of our doctors.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
+            st.session_state.messages.append({"role": "assistant", "content": msg_content, "type": "data", "df": df, "sql": sql, "explanation": explanation})
             st.rerun()
             
-        # --- STANDARD FALLBACK ---
+        # --- 5. STANDARD FALLBACK ---
         else:
             sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors LIMIT 5"
             explanation = "Generic query detected. Applied standard 'LIMIT 5' for UI safety."
