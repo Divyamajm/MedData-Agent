@@ -319,9 +319,8 @@ def parse_housing_constraints(prompt: str) -> HousingSearchFilters:
     elif any(s in prompt_lower for s in ["closest to hospital", "nearest hospital"]):
         filters.sort_by = HousingSortMetric.HOSPITAL_DISTANCE
         filters.sort_order = SortOrder.ASC
-    else:
-        filters.sort_by = HousingSortMetric.LIVABILITY_SCORE
-        filters.sort_order = SortOrder.DESC
+    if re.search(r"\b(all|every|entire|complete|full|directory|list all|show all|show database|all properties|all houses)\b", prompt_lower):
+        filters.limit = 50
 
     return filters
 
@@ -509,10 +508,15 @@ def classify_intent_and_extract_entities(prompt: str, active_domain: Optional[Do
         1 if filters.available_today else 0
     ])
 
+    # Check for complete directory / all records intent
+    has_all_intent = bool(re.search(r"\b(all|every|entire|complete|full|directory|list all|show all|show database|details of all|all data)\b", prompt_lower))
+    if has_all_intent:
+        filters.limit = 200
+
     # Determine intent type
     if ambiguity_detected:
         intent = IntentType.AMBIGUOUS
-    elif any(d in prompt_lower for d in ["directory", "list all", "all doctors", "show database", "show all", "all data", "give all", "all the data", "all of the data", "every doctor", "entire", "full data", "excel", "sheet", "table", "complete data", "all data of the doctors"]):
+    elif has_all_intent:
         intent = IntentType.DIRECTORY
         filters.limit = 200
     elif active_constraints_count >= 3:
