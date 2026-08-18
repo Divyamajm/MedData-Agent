@@ -397,7 +397,8 @@ def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = D
                 "Distance (km)": f"{d.get('distance_miles')} km",
                 "Availability": "🟢 Today (Yes)" if d.get("is_available_today") == "Yes" else f"📅 Next: {d.get('next_available_date')}"
             })
-        comp_df = pd.DataFrame(comp_data).set_index("Doctor Name").T
+        comp_df = pd.DataFrame(comp_data).drop_duplicates(subset=["Doctor Name"])
+        comp_df = comp_df.set_index("Doctor Name").T
         st.dataframe(comp_df, height=350)
     elif domain == DomainType.REAL_ESTATE:
         comp_data = []
@@ -415,7 +416,8 @@ def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = D
                 "Metro Transit": f"{p.get('transit_dist_miles')} km",
                 "Configuration": f"{p.get('bedrooms')} BHK / {p.get('bathrooms')} Bath ({p.get('sqft')} sqft)"
             })
-        comp_df = pd.DataFrame(comp_data).set_index("Property").T
+        comp_df = pd.DataFrame(comp_data).drop_duplicates(subset=["Property"])
+        comp_df = comp_df.set_index("Property").T
         st.dataframe(comp_df, height=400)
     else:
         # Dynamic Dataset / Imported CSV File Comparison
@@ -450,6 +452,7 @@ def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = D
         title_display = id_col.replace("_", " ").title() if id_col else list(comp_data[0].keys())[0]
         comp_df = pd.DataFrame(comp_data)
         if title_display in comp_df.columns:
+            comp_df = comp_df.drop_duplicates(subset=[title_display])
             comp_df = comp_df.set_index(title_display).T
         st.dataframe(comp_df, height=450)
 

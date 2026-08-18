@@ -344,7 +344,7 @@ with tab_comp:
             if not id_col:
                 id_col = custom_df.columns[0]
 
-            entity_options = custom_df[id_col].astype(str).tolist()
+            entity_options = custom_df[id_col].dropna().astype(str).unique().tolist()
             selected_entities = st.multiselect(
                 f"Select Entities to Compare Side-by-Side ({id_col}):", 
                 entity_options, 
@@ -352,7 +352,7 @@ with tab_comp:
             )
             
             if selected_entities:
-                filtered_cmp = custom_df[custom_df[id_col].astype(str).isin(selected_entities)]
+                filtered_cmp = custom_df[custom_df[id_col].astype(str).isin(selected_entities)].drop_duplicates(subset=[id_col])
                 render_comparison_matrix(filtered_cmp.to_dict(orient="records"), domain=DomainType.DYNAMIC_DATASET, custom_title_col=id_col)
             else:
                 st.info("Select at least 2 entities above to view their side-by-side comparison.")
