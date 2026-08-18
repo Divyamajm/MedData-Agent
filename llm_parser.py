@@ -24,12 +24,11 @@ from models import (
     CanonicalSpecialty,
     SearchFilters,
     HousingSearchFilters,
-    CollegeSearchFilters,
     IntentClassificationResult
 )
 from safety import (
     check_acute_emergency,
-    check_medical_advice_seeking,
+    check_medical_advice_refusal,
     check_prompt_injection,
     check_unknown_attributes
 )
@@ -42,30 +41,23 @@ CRITICAL RULES:
 1. NEVER output SQL or code.
 2. NEVER diagnose, prescribe medication, or give clinical medical advice.
 3. If the user asks for subjective ranking without metrics (e.g. "who is the best cardiologist?", "top college"), set "ambiguity_detected": true and provide a helpful "clarification_needed" message.
-4. If the user query indicates a severe acute medical emergency (e.g. chest pain, heart attack, stroke, heavy bleeding, cannot breathe), set "intent": "medical_safety_refusal" and indicate emergency.
-5. If the user seeks clinical diagnosis or medication advice, set "intent": "medical_advice_refusal".
-6. If the user asks for unknown attributes not in the database (e.g. spoken language, doctor's years of experience, specific surgeries performed), set "intent": "unknown_attribute_refusal".
+4. If the user query indicates a severe acute medical emergency (e.g. chest pain, heart attack, stroke, heavy bleeding, cannot breathe), set "intent": "emergency".
+5. If the user seeks clinical diagnosis or medication advice, set "intent": "medical_advice".
+6. If the user asks for unknown attributes not in the database (e.g. spoken language, doctor's years of experience, specific surgeries performed), set "intent": "unknown_attribute".
 
 JSON SCHEMA TO RETURN:
 {
-  "domain": "healthcare" | "housing" | "college" | "general",
-  "intent": "doctor_search" | "housing_search" | "college_search" | "directory" | "ranking" | "distance" | "affordability" | "availability" | "negation" | "contradiction" | "medical_safety_refusal" | "unknown_attribute_refusal" | "security_violation",
+  "domain": "healthcare" | "real_estate" | "dynamic_dataset",
+  "intent": "doctor_search" | "housing_search" | "directory" | "ranking" | "distance" | "affordability" | "availability" | "ambiguous" | "contradiction" | "emergency" | "medical_advice" | "unknown_attribute" | "prompt_injection",
   "ambiguity_detected": boolean,
   "clarification_needed": string or null,
-  "confidence_score": float (0.0 to 1.0),
+  "confidence": float (0.0 to 1.0),
   "filters": {
     "specialty": string or null (e.g. "Cardiology", "Neurology", "Orthopedics", "Dermatology", "Pediatrics", "General Medicine", "Oncology", "Psychiatry", "ENT", "Gynecology"),
-    "doctor_name": string or null,
-    "hospital_name": string or null,
-    "city": string or null,
-    "max_distance_miles": float or null,
-    "max_fee_inr": float or null,
-    "min_rating": float or null,
+    "max_distance": float or null,
+    "max_fee": float or null,
     "available_today": boolean or null,
-    "is_free": boolean or null,
-    "negated_specialties": [string],
-    "sort_by": string or null,
-    "sort_order": "ASC" | "DESC"
+    "negated_specialties": [string]
   }
 }
 Return ONLY valid raw JSON with no surrounding markdown or explanation.
@@ -89,28 +81,52 @@ def parse_intent_with_llm(
     if is_injection:
         latency = (time.perf_counter() - start_time) * 1000
         return IntentClassificationResult(
-            raw_query=query,
+            raw_prompt=query,
             domain=DomainType.HEALTHCARE,
-            intent=IntentType.SECURITY_VIOLATION,
+            intent=IntentType.PROMPT_INJECTION,
             ambiguity_detected=False,
-            clarification_needed=f"Security violation detected: {inj_reason}",
-            confidence_score=1.0,
+            confidence=1.0,
             filters=SearchFilters(),
-            explanation="Blocked by deterministic security pre-screen."
+            explanation=f"Blocked by deterministic security pre-screen: {inj_reason}"
         ), latency, None
 
-    is_emergency, em_reason = check_acute_emergency(query)
-    if is_emergency:
+    em_check = check_acute_emergency(query)
+    if em_check and em_check.get("is_emergency"):
         latency = (time.perf_counter() - start_time) * 1000
         return IntentClassificationResult(
-            raw_query=query,
+            raw_prompt=query,
             domain=DomainType.HEALTHCARE,
-            intent=IntentType.MEDICAL_SAFETY_REFUSAL,
+            intent=IntentType.EMERGENCY,
             ambiguity_detected=False,
-            clarification_needed=em_reason,
-            confidence_score=1.0,
+            confidence=1.0,
             filters=SearchFilters(),
-            explanation="Direct emergency protocol activation."
+            explanation=em_check.get("message", "Direct emergency protocol activation.")
+        ), latency, None
+
+    med_check = check_medical_advice_refusal(query)
+    if med_check and med_check.get("blocked"):
+        latency = (time.perf_counter() - start_time) * 1000
+        return IntentClassificationResult(
+            raw_prompt=query,
+            domain=DomainType.HEALTHCARE,
+            intent=IntentType.MEDICAL_ADVICE,
+            ambiguity_detected=False,
+            confidence=1.0,
+            filters=SearchFilters(),
+            explanation=med_check.get("message", "Clinical diagnosis refusal.")
+        ), latency, None
+
+    unk_check = check_unknown_attributes(query)
+    if unk_check and unk_check.get("is_unknown"):
+        latency = (time.perf_counter() - start_time) * 1000
+        return IntentClassificationResult(
+            raw_prompt=query,
+            domain=DomainType.HEALTHCARE,
+            intent=IntentType.UNKNOWN_ATTRIBUTE,
+            ambiguity_detected=False,
+            confidence=1.0,
+            filters=SearchFilters(),
+            explanation=unk_check.get("message", "Untracked attribute refusal.")
         ), latency, None
 
     # Resolve API Key from argument or environment
@@ -186,17 +202,9 @@ def parse_intent_with_llm(
 
         search_filters = SearchFilters(
             specialty=canonical_spec,
-            doctor_name=filters_dict.get("doctor_name"),
-            hospital_name=filters_dict.get("hospital_name"),
-            city=filters_dict.get("city"),
-            max_distance_miles=filters_dict.get("max_distance_miles"),
-            max_fee=filters_dict.get("max_fee_inr"),
-            min_rating=filters_dict.get("min_rating"),
-            available_today=filters_dict.get("available_today", False) if filters_dict.get("available_today") is not None else False,
-            is_free=filters_dict.get("is_free", False) if filters_dict.get("is_free") is not None else False,
-            negated_specialties=filters_dict.get("negated_specialties", []),
-            sort_by=filters_dict.get("sort_by"),
-            sort_order=filters_dict.get("sort_order", "ASC")
+            max_distance=filters_dict.get("max_distance"),
+            max_fee=filters_dict.get("max_fee"),
+            available_today=filters_dict.get("available_today", False) if filters_dict.get("available_today") is not None else False
         )
 
         intent_val = parsed_dict.get("intent", "doctor_search")
@@ -212,12 +220,12 @@ def parse_intent_with_llm(
             domain_enum = DomainType.HEALTHCARE
 
         result = IntentClassificationResult(
-            raw_query=query,
+            raw_prompt=query,
             domain=domain_enum,
             intent=intent_enum,
             ambiguity_detected=parsed_dict.get("ambiguity_detected", False),
-            clarification_needed=parsed_dict.get("clarification_needed"),
-            confidence_score=float(parsed_dict.get("confidence_score", 0.95)),
+            ambiguity_reason=parsed_dict.get("clarification_needed"),
+            confidence=float(parsed_dict.get("confidence", 0.95)),
             filters=search_filters,
             explanation=f"LLM-parsed intent ({provider.upper()}) verified by Pydantic schema."
         )
