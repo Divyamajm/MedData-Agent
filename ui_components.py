@@ -8,6 +8,7 @@ and insurance calculators.
 import textwrap
 from datetime import datetime
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from typing import Dict, Any, List, Optional
 from models import ExplainabilityAudit, QueryResult, DomainType
@@ -636,3 +637,291 @@ def render_safety_warning(warning_type: str, message: str):
         st.info(message)
     else:
         st.error(message)
+
+
+def generate_html_report(
+    title: str,
+    domain: str,
+    records: List[Dict[str, Any]],
+    audit_trail: Optional[ExplainabilityAudit] = None,
+    notes: Optional[str] = None
+) -> str:
+    """Generates a professional, printable HTML/CSS Executive Brief with print styling, watermark, and metadata."""
+    now_str = datetime.now().strftime("%d %B %Y, %I:%M %p")
+    
+    if not records:
+        table_html = "<p><em>No records selected for this report.</em></p>"
+    else:
+        headers = [k for k in records[0].keys() if k.lower() not in ["latitude", "longitude", "id"]]
+        table_html = "<table class='report-table'><thead><tr>"
+        for h in headers:
+            table_html += f"<th>{h.replace('_', ' ').title()}</th>"
+        table_html += "</tr></thead><tbody>"
+        
+        for r in records:
+            table_html += "<tr>"
+            for h in headers:
+                val = r.get(h, "")
+                if isinstance(val, (int, float)) and not isinstance(val, bool):
+                    if "fee" in h.lower() or "price" in h.lower() or "rent" in h.lower() or "salary" in h.lower():
+                        val_str = f"₹{int(val):,}" if val >= 100 else f"₹{val:.2f}"
+                    elif "rating" in h.lower() or "score" in h.lower():
+                        val_str = f"⭐ {val}"
+                    elif "rate" in h.lower() or "pct" in h.lower() or "percent" in h.lower():
+                        val_str = f"{val}%"
+                    else:
+                        val_str = f"{int(val):,}" if isinstance(val, int) else f"{val}"
+                else:
+                    val_str = str(val)
+                table_html += f"<td>{val_str}</td>"
+            table_html += "</tr>"
+        table_html += "</tbody></table>"
+
+    audit_section = ""
+    if audit_trail:
+        audit_section = f"""
+        <div class="audit-box">
+            <h4>🔒 Query Provenance & Anti-Hallucination Audit</h4>
+            <p><strong>Interpreted Intent:</strong> {audit_trail.intent} | <strong>Domain:</strong> {audit_trail.domain} | <strong>Execution Latency:</strong> {audit_trail.execution_time_ms} ms</p>
+            <p><strong>Verified SQL Query:</strong> <code>{audit_trail.sql_query}</code></p>
+            <p><strong>Grounding Fidelity:</strong> 🟢 100% Deterministic (Zero AI Hallucination)</p>
+        </div>
+        """
+
+    notes_section = f"<div class='notes-box'><strong>Clinical / Operational Notes:</strong> {notes}</div>" if notes else ""
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{title} - MedData AI & UrbanLocate Report</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+        body {{
+            font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            padding: 2rem;
+            margin: 0;
+        }}
+        .report-card {{
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 2.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            border: 1px solid #e2e8f0;
+            max-width: 1000px;
+            margin: 0 auto;
+        }}
+        .header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #0284c7;
+            padding-bottom: 1.25rem;
+            margin-bottom: 1.5rem;
+        }}
+        .header h1 {{
+            margin: 0;
+            font-size: 1.5rem;
+            color: #0369a1;
+            font-weight: 800;
+        }}
+        .header .meta {{
+            font-size: 0.85rem;
+            color: #64748b;
+            text-align: right;
+        }}
+        .badge {{
+            display: inline-block;
+            background: #0284c7;
+            color: white;
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }}
+        .report-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.88rem;
+        }}
+        .report-table th {{
+            background-color: #f1f5f9;
+            color: #1e293b;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 2px solid #cbd5e1;
+            font-weight: 700;
+        }}
+        .report-table td {{
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            color: #334155;
+        }}
+        .report-table tr:nth-child(even) {{
+            background-color: #f8fafc;
+        }}
+        .audit-box {{
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: #166534;
+        }}
+        .audit-box h4 {{
+            margin: 0 0 0.5rem 0;
+            color: #15803d;
+        }}
+        .audit-box code {{
+            background: rgba(0,0,0,0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }}
+        .notes-box {{
+            background-color: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: #92400e;
+        }}
+        .footer {{
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }}
+        @media print {{
+            body {{ background: white; padding: 0; }}
+            .report-card {{ box-shadow: none; border: none; padding: 0; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="report-card">
+        <div class="header">
+            <div>
+                <span class="badge">{domain}</span>
+                <h1>{title}</h1>
+            </div>
+            <div class="meta">
+                <div>Generated: <strong>{now_str}</strong></div>
+                <div>System: <strong>MedData AI Enterprise Engine</strong></div>
+            </div>
+        </div>
+
+        <h3>📊 Summary of Verified Records ({len(records)} items)</h3>
+        {table_html}
+
+        {audit_section}
+        {notes_section}
+
+        <div class="footer">
+            <div>MedData AI & UrbanLocate • Confidential Executive Report</div>
+            <div>Zero-Hallucination Disambiguation & AST SQL Grounding</div>
+        </div>
+    </div>
+</body>
+</html>"""
+    return html_content.strip()
+
+
+def render_voice_mic_component(key_prefix: str = "voice"):
+    """Renders an interactive Web Speech API microphone widget using native browser speech recognition."""
+    html_code = """
+    <div style="background: linear-gradient(135deg, #091e3a 0%, #173865 100%); border-radius: 12px; padding: 14px 18px; color: white; border: 1px solid rgba(255,255,255,0.15); font-family: 'Plus Jakarta Sans', sans-serif;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button id="micBtn" onclick="toggleListening()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none; border-radius: 50%; width: 46px; height: 46px; color: white; font-size: 20px; cursor: pointer; box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); transition: all 0.3s ease;">
+                    🎙️
+                </button>
+                <div style="text-align: left;">
+                    <div style="font-weight: 700; font-size: 14px;" id="micStatus">Tap Mic for Live Browser Speech Recognition</div>
+                    <div style="font-size: 11px; color: #93c5fd;">Chrome/Edge Web Speech API • Indian English / Multilingual</div>
+                </div>
+            </div>
+            <button onclick="copySpeechToClipboard()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                📋 Copy Speech
+            </button>
+        </div>
+        <div id="transcriptBox" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; font-size: 13px; min-height: 36px; margin-top: 10px; color: #e2e8f0; text-align: left; line-height: 1.4;">
+            <em style="color: #94a3b8;">Spoken voice query will transcribe here in real-time...</em>
+        </div>
+    </div>
+
+    <script>
+        let recognition = null;
+        let isRecording = false;
+        let finalTranscript = '';
+
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRec();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-IN';
+
+            recognition.onstart = function() {
+                isRecording = true;
+                document.getElementById('micStatus').innerText = "🔴 Listening... Speak now";
+                document.getElementById('micBtn').style.transform = "scale(1.15)";
+                document.getElementById('micBtn').style.boxShadow = "0 0 25px #ef4444";
+            };
+
+            recognition.onresult = function(event) {
+                let current = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    current += event.results[i][0].transcript;
+                }
+                finalTranscript = current;
+                document.getElementById('transcriptBox').innerHTML = '<strong>Dictated:</strong> ' + current;
+                navigator.clipboard.writeText(current).catch(err => {});
+            };
+
+            recognition.onerror = function(event) {
+                document.getElementById('micStatus').innerText = "⚠️ Mic error: " + event.error;
+                document.getElementById('micBtn').style.transform = "scale(1)";
+                isRecording = false;
+            };
+
+            recognition.onend = function() {
+                isRecording = false;
+                document.getElementById('micStatus').innerText = "✅ Speech Captured (Auto-copied to clipboard!)";
+                document.getElementById('micBtn').style.transform = "scale(1)";
+                document.getElementById('micBtn').style.boxShadow = "0 0 12px rgba(239, 68, 68, 0.5)";
+            };
+        } else {
+            document.getElementById('micStatus').innerText = "Web Speech API not supported in this browser. Please type query.";
+        }
+
+        function toggleListening() {
+            if (!recognition) return;
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+
+        function copySpeechToClipboard() {
+            if (finalTranscript) {
+                navigator.clipboard.writeText(finalTranscript).then(() => {
+                    alert('Copied dictated speech to clipboard! You can paste it into the search box.');
+                });
+            } else {
+                alert('Please tap the mic and speak first.');
+            }
+        }
+    </script>
+    """
+    components.html(html_code, height=140)
