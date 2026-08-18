@@ -5,6 +5,7 @@ Interactive Geo-Spatial Maps, Appointment Conflict Scheduler, Side-by-Side Compa
 Insurance Estimator, Multi-Dataset Explorer, AST SQL Sandbox, and Automated Test Suite.
 """
 
+import os
 import time
 import pandas as pd
 import streamlit as st
@@ -24,7 +25,7 @@ from safety import validate_sql_sandbox_query
 from dynamic_engine import profile_dataframe, execute_dynamic_nl_query, get_sample_dataset
 from ui_components import (
     inject_custom_css, render_header, render_doctor_cards, render_housing_cards,
-    render_geo_map, render_comparison_matrix, generate_ics_calendar,
+    render_comparison_matrix, generate_ics_calendar,
     render_insurance_calculator, render_audit_trail, render_clarification_buttons,
     render_safety_warning, render_dynamic_dataset_view
 )
