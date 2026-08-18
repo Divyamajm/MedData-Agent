@@ -1,8 +1,8 @@
 """
-MedData AI & UrbanLocate - Multi-Domain Discovery & Triage Platform
-Production Streamlit Application with Deterministic Query Engines,
+MedData AI & UrbanLocate - Multi-Domain Discovery & Triage Platform (v1.1.0)
+Production Streamlit Application with Dual-Engine Intent Parsing,
 Interactive Geo-Spatial Maps, Appointment Conflict Scheduler, Side-by-Side Comparison Matrix,
-Insurance Estimator, Multi-Dataset Explorer, AST SQL Sandbox, and Automated Test Suite.
+Insurance Estimator, Multi-Dataset Explorer, AST SQL Sandbox, and Scientific AI Benchmark.
 """
 
 import os
