@@ -258,29 +258,54 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
 
     filtered_df = df.copy()
 
-    # 1. Specialized Education / College Sort Rules
-    if "nirf" in prompt_lower or "national rank" in prompt_lower or "ranking" in prompt_lower:
-        if "NIRF_Rank" in filtered_df.columns:
+    # 1. Extract Numeric Comparison Rules for all columns
+    # Top N limit (e.g. "top 10 colleges", "top 5")
+    limit = 25
+    top_n_match = re.search(r"\b(?:top|first|show)\s*(\d{1,3})\b", prompt_lower)
+    if top_n_match:
+        limit = int(top_n_match.group(1))
+    elif "all" in prompt_lower or "directory" in prompt_lower or "everything" in prompt_lower:
+        limit = len(filtered_df)
+
+    # 2. Specialized Education / College Sort & Filter Rules
+    if "NIRF_Rank" in filtered_df.columns:
+        # Check for rank threshold e.g. "rank under 50", "rank < 20", "nirf <= 15"
+        rank_thresh = re.search(r"(?:nirf|rank|ranking)\s*(?:under|below|less than|<=|<)\s*(\d{1,3})", prompt_lower)
+        if rank_thresh:
+            r_val = int(rank_thresh.group(1))
+            filtered_df = filtered_df[filtered_df["NIRF_Rank"] <= r_val]
+            applied_rules.append(f"NIRF Rank ≤ {r_val}")
+        elif "nirf" in prompt_lower or "national rank" in prompt_lower or "ranking" in prompt_lower:
             filtered_df = filtered_df.sort_values(by="NIRF_Rank", ascending=True)
             applied_rules.append("Sorted by NIRF National Rank (1 = Top Rank)")
-    elif any(k in prompt_lower for k in ["placement package", "package", "highest placement", "lpa"]):
-        if "Avg_Package_LPA" in filtered_df.columns:
+
+    # Placement package filter / sort
+    if "Avg_Package_LPA" in filtered_df.columns:
+        pkg_thresh = re.search(r"(?:package|placement|lpa|salary)\s*(?:>=|>|above|over|at least|min)\s*(\d+(?:\.\d+)?)", prompt_lower)
+        if pkg_thresh:
+            pkg_val = float(pkg_thresh.group(1))
+            filtered_df = filtered_df[filtered_df["Avg_Package_LPA"] >= pkg_val]
+            applied_rules.append(f"Average Package ≥ {pkg_val} LPA")
+        elif any(k in prompt_lower for k in ["placement package", "package", "highest placement", "highest package", "top salary", "lpa"]):
             filtered_df = filtered_df.sort_values(by="Avg_Package_LPA", ascending=False)
             applied_rules.append("Sorted by Average Placement Package LPA (DESC)")
-        elif "Salary_INR_LPA" in filtered_df.columns:
-            filtered_df = filtered_df.sort_values(by="Salary_INR_LPA", ascending=False)
-            applied_rules.append("Sorted by Annual Salary LPA (DESC)")
-    elif "placement rate" in prompt_lower:
-        if "Placement_Rate" in filtered_df.columns:
+
+    if "Placement_Rate" in filtered_df.columns:
+        pr_thresh = re.search(r"(?:placement rate|placement %|placed)\s*(?:>=|>|above|at least|min)\s*(\d+(?:\.\d+)?)", prompt_lower)
+        if pr_thresh:
+            pr_val = float(pr_thresh.group(1))
+            filtered_df = filtered_df[filtered_df["Placement_Rate"] >= pr_val]
+            applied_rules.append(f"Placement Rate ≥ {pr_val}%")
+        elif "placement rate" in prompt_lower:
             filtered_df = filtered_df.sort_values(by="Placement_Rate", ascending=False)
             applied_rules.append("Sorted by Placement Rate % (DESC)")
 
-    # 2. Price / Cost Filtering (Support ₹, Rs, K, Lakhs, INR)
+    # 3. Price / Cost Filtering (Support ₹, Rs, K, Lakhs, INR)
     price_col = profile.primary_price_col
     if price_col and price_col in filtered_df.columns:
         lakh_match = re.search(r"(?:under|below|less than|<=|<|\$|₹|rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|l)\b", prompt_lower)
         k_match = re.search(r"(?:under|below|less than|<=|<|\$|₹|rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:k|thousand)\b", prompt_lower)
-        num_match = re.search(r"(?:under|below|less than|<=|<|\$|₹|rs\.?)\s*(\d{3,7})", prompt_lower)
+        num_match = re.search(r"(?:under|below|less than|<=|<|\$|₹|rs\.?)\s*(\d{4,8})", prompt_lower)
         
         target_max_price = None
         if lakh_match:
@@ -294,24 +319,34 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
             filtered_df = filtered_df[filtered_df[price_col] <= target_max_price]
             applied_rules.append(f"Price / Fee ({price_col}) ≤ ₹{int(target_max_price):,}")
 
-    # 3. Rating / Score Filtering
-    rating_col = profile.primary_rating_col
-    if rating_col and rating_col in filtered_df.columns:
-        rating_match = re.search(r"(?:rating|score|stars?)\s*(?:>=|>|above|at least|min)\s*(\d+(?:\.\d+)?)", prompt_lower)
-        if rating_match:
-            min_r = float(rating_match.group(1))
-            filtered_df = filtered_df[filtered_df[rating_col] >= min_r]
-            applied_rules.append(f"Score ({rating_col}) ≥ {min_r}")
-
-    # 4. Categorical / Locality / Keyword Filtering
+    # 4. Keyword & Substring Search Across Title, Name, City, Category & Text Columns
+    # Identify institutional / brand keywords:
     for col_name, col_prof in profile.columns.items():
-        if col_prof.semantic_role == SemanticColumnRole.CATEGORY_TYPE:
+        if col_prof.semantic_role in [SemanticColumnRole.TITLE_NAME, SemanticColumnRole.CATEGORY_TYPE, SemanticColumnRole.GENERIC_TEXT]:
             unique_vals = [str(v) for v in df[col_name].dropna().unique()]
             for val in unique_vals:
-                if len(val) > 2 and val.lower() in prompt_lower:
-                    filtered_df = filtered_df[filtered_df[col_name].astype(str).str.lower() == val.lower()]
-                    applied_rules.append(f"Filtered {col_name} == '{val}'")
+                if len(val) >= 3 and re.search(r"\b" + re.escape(val.lower()) + r"\b", prompt_lower):
+                    filtered_df = filtered_df[filtered_df[col_name].astype(str).str.contains(re.escape(val), case=False, na=False)]
+                    applied_rules.append(f"Filtered {col_name} contains '{val}'")
                     break
+
+    # General Name Token Search (e.g. "iit", "iits", "nit", "nits", "bits", "vit", "maruti", "tata")
+    title_col = profile.primary_title_col
+    if title_col and title_col in filtered_df.columns:
+        for brand_token in ["iit", "nit", "bits", "vit", "iiit", "coep", "dtu", "rvce", "maruti", "hyundai", "tata", "honda", "toyota", "mahindra", "ford", "bmw", "mercedes", "audi"]:
+            if re.search(r"\b" + brand_token + r"s?\b", prompt_lower):
+                filtered_df = filtered_df[filtered_df[title_col].astype(str).str.contains(brand_token, case=False, na=False)]
+                applied_rules.append(f"Name ({title_col}) contains '{brand_token.upper()}'")
+
+    # If "top N" is specified without explicit sort, sort by NIRF_Rank or Primary Rating
+    if top_n_match and not any(r for r in applied_rules if "Sorted" in r or "Ranked" in r):
+        rating_col = profile.primary_rating_col
+        if "NIRF_Rank" in filtered_df.columns:
+            filtered_df = filtered_df.sort_values(by="NIRF_Rank", ascending=True)
+            applied_rules.append("Ranked by NIRF National Rank")
+        elif rating_col and rating_col in filtered_df.columns:
+            filtered_df = filtered_df.sort_values(by=rating_col, ascending=False)
+            applied_rules.append(f"Ranked by {rating_col} (DESC)")
 
     # 5. Sorting & Ordering
     if any(k in prompt_lower for k in ["cheapest", "lowest price", "lowest fee", "lowest fees", "lowest tuition", "lowest rent", "affordable", "budget", "lowest cost", "tuition fees"]):
@@ -321,14 +356,9 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
     elif any(k in prompt_lower for k in ["safest", "lowest crime", "low crime"]):
         for col_name, col_prof in profile.columns.items():
             if col_prof.semantic_role == SemanticColumnRole.SAFETY_RISK:
-                filtered_df = filtered_df.sort_values(by=col_name, ascending=True)
+                filtered_df = filtered_df[col_name].sort_values(ascending=True)
                 applied_rules.append(f"Sorted by lowest {col_name} (ASC - Safest)")
                 break
-
-    # 6. Limit / Rows
-    limit = 25
-    if "all" in prompt_lower or "directory" in prompt_lower or "everything" in prompt_lower:
-        limit = len(filtered_df)
     
     result_df = filtered_df.head(limit)
 
