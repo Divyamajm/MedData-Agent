@@ -459,19 +459,20 @@ with tab_dynamic:
         # Profile Dataset Dynamically
         table_profile = profile_dataframe(active_dynamic_df, table_name=active_dataset_title)
 
-        # Check if an override was set by an ambiguity button
-        default_dyn_val = ""
+        # Cleanly initialize and update query state before widget instantiation
+        if "dynamic_search_box" not in st.session_state:
+            st.session_state["dynamic_search_box"] = ""
+            
         if "dynamic_search_override" in st.session_state and st.session_state["dynamic_search_override"]:
-            default_dyn_val = st.session_state.pop("dynamic_search_override")
+            st.session_state["dynamic_search_box"] = st.session_state.pop("dynamic_search_override")
 
         st.divider()
         st.markdown("##### 🔎 Zero-Shot Natural Language Search")
         dyn_col1, dyn_col2 = st.columns([3, 1])
         dyn_prompt = dyn_col1.text_input(
             "Search or filter this dataset:", 
-            value=default_dyn_val,
             placeholder=f"e.g. '{table_profile.suggested_queries[0] if table_profile.suggested_queries else 'Filter dataset'}'",
-            key=f"dyn_input_{active_dataset_title}_{abs(hash(default_dyn_val)) % 100000}"
+            key="dynamic_search_box"
         )
         run_dyn_search = dyn_col2.button("🚀 Analyze & Filter")
 
