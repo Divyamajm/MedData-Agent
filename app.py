@@ -688,8 +688,12 @@ with tab_developer:
 
         if st.button("🚀 Run Complete 32-Test Suite Now", type="primary"):
             with st.spinner("Running verification battery across all test cases..."):
-                t_results = run_all_tests()
-                sql_results = run_sql_sandbox_security_tests()
+                st.session_state.test_results = run_all_tests()
+                st.session_state.sql_test_results = run_sql_sandbox_security_tests()
+
+        if "test_results" in st.session_state and st.session_state.test_results:
+            t_results = st.session_state.test_results
+            sql_results = st.session_state.get("sql_test_results", [])
 
             pass_count = sum(1 for r in t_results if r.passed)
             total_count = len(t_results)
@@ -707,13 +711,14 @@ with tab_developer:
                     "Input Prompt": r.test_case.input_prompt,
                     "Expected Intent": r.test_case.expected_intent.value,
                     "Actual Intent": r.actual_intent.value,
-                    "Latency": f"{r.latency_ms:.2f} ms",
+                    "Latency": f"{r.execution_time_ms:.2f} ms",
                     "Details": "; ".join(r.failure_reasons) if r.failure_reasons else "Clean Pass"
                 })
 
             st.dataframe(pd.DataFrame(res_data), hide_index=True)
 
-            st.markdown("##### 🔒 SQL Sandbox Security Defense Tests (10/10)")
-            sql_pass = sum(1 for r in sql_results if r["passed"])
-            st.metric("SQL Injection & Mutation Block Rate", f"{sql_pass}/{len(sql_results)} (100%)")
-            st.dataframe(pd.DataFrame(sql_results), hide_index=True)
+            if sql_results:
+                st.markdown("##### 🔒 SQL Sandbox Security Defense Tests (10/10)")
+                sql_pass = sum(1 for r in sql_results if r.get("passed", False))
+                st.metric("SQL Injection & Mutation Block Rate", f"{sql_pass}/{len(sql_results)} (100%)")
+                st.dataframe(pd.DataFrame(sql_results), hide_index=True)
