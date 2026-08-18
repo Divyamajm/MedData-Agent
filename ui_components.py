@@ -143,14 +143,24 @@ def render_app_header():
     """, unsafe_allow_html=True)
 
 
+import textwrap
+
 def render_doctor_cards(doctors: List[Dict[str, Any]], context_key: str = "main"):
     """
-    Renders a grid of polished doctor cards sourced strictly from SQLite rows.
+    Renders polished doctor cards sourced strictly from SQLite rows.
+    Uses textwrap.dedent to ensure Markdown parser does not treat HTML as preformatted code blocks.
     """
     if not doctors:
         return
 
-    for idx, doc in enumerate(doctors):
+    # If large result set (e.g. Directory of 200 doctors), show interactive table with cards for top matches
+    if len(doctors) > 5:
+        st.caption(f"Displaying top 5 doctor cards out of **{len(doctors)}** matching records. Full directory table available below.")
+        cards_to_show = doctors[:5]
+    else:
+        cards_to_show = doctors
+
+    for idx, doc in enumerate(cards_to_show):
         avail_badge = (
             '<span class="avail-tag-yes">🟢 Available Today</span>' 
             if doc.get("is_available_today") == "Yes" 
@@ -161,22 +171,21 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], context_key: str = "main"
         with st.container():
             col_main, col_action = st.columns([4, 1])
             with col_main:
-                card_html = f"""
-                <div class="doctor-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div class="doc-name">{doc.get('name')}</div>
-                        <div>{avail_badge}</div>
-                    </div>
-                    <span class="spec-badge">{doc.get('specialty')}</span> &bull; <span style="font-size: 0.85rem; color: #718096;">Surgery: <strong>{doc.get('primary_surgery')}</strong></span>
-                    
-                    <div class="metric-grid">
-                        <div class="metric-item">⭐ Satisfaction: <span class="metric-val">{doc.get('satisfaction_score')}/100</span></div>
-                        <div class="metric-item">📈 Success Rate: <span class="metric-val">{doc.get('surgery_success_rate')}%</span></div>
-                        <div class="metric-item">📍 Distance: <span class="metric-val">{doc.get('distance_miles')} mi</span></div>
-                        <div class="metric-item">💰 Fee: <span class="metric-val">{fee_display}</span></div>
-                    </div>
-                </div>
-                """
+                card_html = textwrap.dedent(f"""
+<div class="doctor-card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="doc-name">{doc.get('name')}</div>
+        <div>{avail_badge}</div>
+    </div>
+    <span class="spec-badge">{doc.get('specialty')}</span> &bull; <span style="font-size: 0.85rem; color: #718096;">Surgery: <strong>{doc.get('primary_surgery')}</strong></span>
+    <div class="metric-grid">
+        <div class="metric-item">⭐ Satisfaction: <span class="metric-val">{doc.get('satisfaction_score')}/100</span></div>
+        <div class="metric-item">📈 Success Rate: <span class="metric-val">{doc.get('surgery_success_rate')}%</span></div>
+        <div class="metric-item">📍 Distance: <span class="metric-val">{doc.get('distance_miles')} mi</span></div>
+        <div class="metric-item">💰 Fee: <span class="metric-val">{fee_display}</span></div>
+    </div>
+</div>
+""").strip()
                 st.markdown(card_html, unsafe_allow_html=True)
             
             with col_action:
@@ -185,6 +194,20 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], context_key: str = "main"
                 if st.button("📋 Book Demo", key=f"book_btn_{context_key}_{doc.get('id')}_{idx}"):
                     st.session_state.selected_doctor_for_booking = doc
                     st.rerun()
+
+    # If there are more than 5 results, provide an expandable table for the rest
+    if len(doctors) > 5:
+        with st.expander(f"📋 View Complete Table ({len(doctors)} Doctors)", expanded=False):
+            table_df = pd.DataFrame(doctors)[[
+                "id", "name", "specialty", "primary_surgery", 
+                "satisfaction_score", "surgery_success_rate", 
+                "distance_miles", "consultation_fee", "is_available_today", "next_available_date"
+            ]]
+            table_df.columns = [
+                "ID", "Doctor Name", "Specialty", "Primary Surgery",
+                "Satisfaction", "Success Rate (%)", "Distance (mi)", "Fee ($)", "Available Today", "Next Date"
+            ]
+            st.dataframe(table_df, use_container_width=True, hide_index=True)
 
 
 def render_audit_trail(audit: ExplainabilityAudit):

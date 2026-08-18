@@ -125,11 +125,19 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_satisfaction ON Doctors(satisfaction_score);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_success ON Doctors(surgery_success_rate);")
 
-    # Check if data already exists
+    # Check if data already exists and has the new unique full names
     c.execute("SELECT COUNT(*) FROM Doctors")
     count = c.fetchone()[0]
+    
+    needs_seed = (count == 0 or force_reset)
+    if not needs_seed and count > 0:
+        c.execute("SELECT name FROM Doctors LIMIT 5")
+        sample_names = [row[0] for row in c.fetchall()]
+        # Check if sample names are legacy format like 'Dr. Smith' (only 2 words) instead of 'Dr. Sarah Chen' (3 words)
+        if any(len(n.split()) < 3 for n in sample_names):
+            needs_seed = True
 
-    if count == 0 or force_reset:
+    if needs_seed:
         c.execute("DELETE FROM Doctors")
         c.execute("DELETE FROM Specialties")
         c.execute("DELETE FROM Appointments")
