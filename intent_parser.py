@@ -512,7 +512,7 @@ def classify_intent_and_extract_entities(prompt: str, active_domain: Optional[Do
     # Determine intent type
     if ambiguity_detected:
         intent = IntentType.AMBIGUOUS
-    elif any(d in prompt_lower for d in ["directory", "list all", "all doctors", "show database", "show all"]):
+    elif any(d in prompt_lower for d in ["directory", "list all", "all doctors", "show database", "show all", "all data", "give all", "all the data", "all of the data", "every doctor", "entire", "full data", "excel", "sheet", "table", "complete data", "all data of the doctors"]):
         intent = IntentType.DIRECTORY
         filters.limit = 200
     elif active_constraints_count >= 3:

@@ -161,16 +161,25 @@ def render_header(domain: DomainType = DomainType.HEALTHCARE):
 
 
 def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool = True):
-    """Renders verified doctor cards with surgical metrics and formatting in INR."""
+    """Renders verified doctor records with clean spreadsheet dataframe when all data/directory is requested."""
     if not doctors:
         st.info("No matching doctors found.")
         return
 
-    cards_to_show = doctors[:5] if show_table_fallback and len(doctors) > 5 else doctors
+    # If full directory / large result set (> 5 records), render direct interactive spreadsheet table
+    if len(doctors) > 5:
+        st.markdown(f"### 📋 Verified Doctors Database ({len(doctors)} Records)")
+        st.caption("Direct grounded tabular spreadsheet view of all matching doctors.")
+        df = pd.DataFrame(doctors)
+        display_cols = [c for c in ["id", "name", "specialty", "consultation_fee", "primary_surgery", "surgery_success_rate", "satisfaction_score", "distance_miles", "is_available_today", "next_available_date"] if c in df.columns]
+        if display_cols:
+            df = df[display_cols]
+        st.dataframe(df, height=480, hide_index=True)
+        return
 
     st.markdown(f"**Found {len(doctors)} matching doctor(s) from the verified database:**")
 
-    for doc in cards_to_show:
+    for doc in doctors:
         is_avail = doc.get("is_available_today") == "Yes"
         avail_badge = '<span style="color: #22543d; background-color: #c6f6d5; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">🟢 Available Today</span>' if is_avail else f'<span style="color: #744210; background-color: #fefcbf; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">📅 Next: {doc.get("next_available_date")}</span>'
         fee_val = doc.get('consultation_fee', 0)
@@ -196,21 +205,23 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
         """)
         st.markdown(card_html, unsafe_allow_html=True)
 
-    if show_table_fallback and len(doctors) > 5:
-        with st.expander(f"📋 View Complete Directory Table ({len(doctors)} Doctors)"):
-            df = pd.DataFrame(doctors)
-            st.dataframe(df, hide_index=True)
-
 
 def render_housing_cards(properties: List[Dict[str, Any]]):
-    """Renders real estate property cards with livability metrics in INR."""
+    """Renders real estate property records with clean spreadsheet dataframe when all data/directory is requested."""
     if not properties:
         st.info("No matching properties found.")
         return
 
+    if len(properties) > 6:
+        st.markdown(f"### 📋 Verified Real Estate Database ({len(properties)} Properties)")
+        st.caption("Direct grounded tabular spreadsheet view across all 5 Indian Metros.")
+        df = pd.DataFrame(properties)
+        st.dataframe(df, height=480, hide_index=True)
+        return
+
     st.markdown(f"**Found {len(properties)} matching property record(s) with verified metrics:**")
 
-    for p in properties[:6]:
+    for p in properties:
         livability = p.get("livability_score", 80)
         liv_badge_class = "badge-livability-high" if livability >= 85 else "badge-livability-med"
         
