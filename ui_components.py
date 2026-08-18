@@ -461,10 +461,22 @@ def render_dynamic_dataset_view(df: pd.DataFrame, profile: Any, search_result: O
                     st.session_state["dynamic_search_override"] = opt
                     st.rerun()
         elif search_result.get("data") is not None:
-            res_df = search_result["data"]
+            res_df = search_result["data"].copy()
             st.markdown(f"#### 🎯 Query Results: **{len(res_df)} matches found**")
             st.caption(f"Applied Rules: {', '.join(search_result.get('applied_rules', []))}")
-            st.dataframe(res_df, hide_index=True)
+            
+            # Interactive Sort & Reorganization Controls
+            with st.container():
+                st.markdown("###### 🔄 Reorganize & Sort Results Table")
+                rc1, rc2 = st.columns([2, 2])
+                dyn_sort_col = rc1.selectbox("Choose Column to Reorganize:", ["(Original Search Order)"] + list(res_df.columns), key=f"res_sort_col_{abs(hash(profile.table_name)) % 100000}")
+                dyn_sort_dir = rc2.radio("Sort Direction:", ["⬆️ Ascending (Low to High / A-Z)", "⬇️ Descending (High to Low / Z-A)"], horizontal=True, key=f"res_sort_dir_{abs(hash(profile.table_name)) % 100000}")
+                
+                if dyn_sort_col != "(Original Search Order)" and dyn_sort_col in res_df.columns:
+                    is_asc = "Ascending" in dyn_sort_dir
+                    res_df = res_df.sort_values(by=dyn_sort_col, ascending=is_asc)
+            
+            st.dataframe(res_df, height=450, hide_index=True)
     else:
         st.markdown("#### 📋 Raw Dataset Preview (Top 10 Records)")
         st.dataframe(df.head(10), hide_index=True)

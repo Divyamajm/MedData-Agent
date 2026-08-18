@@ -348,17 +348,101 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
             filtered_df = filtered_df.sort_values(by=rating_col, ascending=False)
             applied_rules.append(f"Ranked by {rating_col} (DESC)")
 
-    # 5. Sorting & Ordering
-    if any(k in prompt_lower for k in ["cheapest", "lowest price", "lowest fee", "lowest fees", "lowest tuition", "lowest rent", "affordable", "budget", "lowest cost", "tuition fees"]):
-        if price_col and price_col in filtered_df.columns:
-            filtered_df = filtered_df.sort_values(by=price_col, ascending=True)
-            applied_rules.append(f"Sorted by lowest {price_col} (ASC - Most Affordable)")
-    elif any(k in prompt_lower for k in ["safest", "lowest crime", "low crime"]):
-        for col_name, col_prof in profile.columns.items():
-            if col_prof.semantic_role == SemanticColumnRole.SAFETY_RISK:
-                filtered_df = filtered_df[col_name].sort_values(ascending=True)
-                applied_rules.append(f"Sorted by lowest {col_name} (ASC - Safest)")
+    # 5. Universal Dynamic Sorting & Ordering (Ascending / Descending across any column)
+    sort_applied = False
+    
+    # Check for direct column name matches in sort directive
+    sort_match = re.search(r"(?:sort|order|arrange|rank|organize)\s+(?:by\s+)?([a-zA-Z0-9_\s]+?)(?:\s+(asc|desc|ascending|descending|high to low|low to high|lowest first|highest first))?$", prompt_lower)
+    
+    if sort_match:
+        target_field = sort_match.group(1).strip().lower()
+        direction_str = sort_match.group(2) if sort_match.group(2) else ""
+        
+        # Match target_field against actual dataframe columns
+        matched_col = None
+        for col in filtered_df.columns:
+            cleaned_col = col.lower().replace("_", " ")
+            if target_field in cleaned_col or cleaned_col in target_field or target_field in col.lower():
+                matched_col = col
                 break
+        
+        if matched_col:
+            is_asc = True if any(a in direction_str for a in ["asc", "low to high", "lowest first", "least"]) or "asc" in prompt_lower else False
+            if any(d in direction_str for d in ["desc", "high to low", "highest first", "most"]) or "desc" in prompt_lower:
+                is_asc = False
+            elif not direction_str:
+                # Default direction: if price/cost/fee/time/crime/rank -> ASC (lower is better), otherwise DESC
+                if any(k in matched_col.lower() for k in ["fee", "price", "cost", "rent", "time", "mins", "crime", "rank", "distance"]):
+                    is_asc = True
+                else:
+                    is_asc = False
+
+            filtered_df = filtered_df.sort_values(by=matched_col, ascending=is_asc)
+            applied_rules.append(f"Organized by '{matched_col}' ({'ASC - Low to High / A-Z' if is_asc else 'DESC - High to Low / Z-A'})")
+            sort_applied = True
+
+    # If no explicit directive, check semantic keywords
+    if not sort_applied:
+        # Check ICU beds / Total beds / Capacity
+        if any(k in prompt_lower for k in ["most icu beds", "highest icu", "max icu", "more icu", "icu beds desc", "icu beds descending"]):
+            for col in filtered_df.columns:
+                if "icu" in col.lower() and "bed" in col.lower():
+                    filtered_df = filtered_df.sort_values(by=col, ascending=False)
+                    applied_rules.append(f"Organized by highest {col} (DESC)")
+                    sort_applied = True
+                    break
+        elif any(k in prompt_lower for k in ["least icu beds", "lowest icu", "icu beds asc", "icu beds ascending"]):
+            for col in filtered_df.columns:
+                if "icu" in col.lower() and "bed" in col.lower():
+                    filtered_df = filtered_df.sort_values(by=col, ascending=True)
+                    applied_rules.append(f"Organized by lowest {col} (ASC)")
+                    sort_applied = True
+                    break
+        elif any(k in prompt_lower for k in ["largest hospital", "biggest hospital", "most beds", "most total beds", "maximum capacity", "total beds desc"]):
+            for col in filtered_df.columns:
+                if "total_bed" in col.lower() or "beds" in col.lower():
+                    filtered_df = filtered_df.sort_values(by=col, ascending=False)
+                    applied_rules.append(f"Organized by highest {col} (DESC - Largest Capacity)")
+                    sort_applied = True
+                    break
+        elif any(k in prompt_lower for k in ["fastest emergency", "quickest response", "lowest response time", "fastest response", "emergency response", "response time asc"]):
+            for col in filtered_df.columns:
+                if "emergency" in col.lower() or "response" in col.lower():
+                    filtered_df = filtered_df.sort_values(by=col, ascending=True)
+                    applied_rules.append(f"Organized by lowest {col} (ASC - Fastest Emergency Response)")
+                    sort_applied = True
+                    break
+        elif any(k in prompt_lower for k in ["highest rating", "top rated", "best rated", "highest patient rating", "highest score", "rating desc"]):
+            rating_col = profile.primary_rating_col
+            if rating_col and rating_col in filtered_df.columns:
+                filtered_df = filtered_df.sort_values(by=rating_col, ascending=False)
+                applied_rules.append(f"Organized by highest {rating_col} (DESC)")
+                sort_applied = True
+        elif any(k in prompt_lower for k in ["lowest rating", "least rated", "worst rating", "rating asc"]):
+            rating_col = profile.primary_rating_col
+            if rating_col and rating_col in filtered_df.columns:
+                filtered_df = filtered_df.sort_values(by=rating_col, ascending=True)
+                applied_rules.append(f"Organized by lowest {rating_col} (ASC)")
+                sort_applied = True
+        elif any(k in prompt_lower for k in ["cheapest", "lowest price", "lowest fee", "lowest fees", "lowest opd", "lowest tuition", "lowest rent", "affordable", "budget", "lowest cost", "tuition fees", "price low to high", "fee asc"]):
+            price_col = profile.primary_price_col
+            if price_col and price_col in filtered_df.columns:
+                filtered_df = filtered_df.sort_values(by=price_col, ascending=True)
+                applied_rules.append(f"Organized by lowest {price_col} (ASC - Most Affordable)")
+                sort_applied = True
+        elif any(k in prompt_lower for k in ["most expensive", "highest fee", "highest price", "highest rent", "highest opd", "price high to low", "fee desc"]):
+            price_col = profile.primary_price_col
+            if price_col and price_col in filtered_df.columns:
+                filtered_df = filtered_df.sort_values(by=price_col, ascending=False)
+                applied_rules.append(f"Organized by highest {price_col} (DESC - Premium / Highest Cost)")
+                sort_applied = True
+        elif any(k in prompt_lower for k in ["safest", "lowest crime", "low crime"]):
+            for col_name, col_prof in profile.columns.items():
+                if col_prof.semantic_role == SemanticColumnRole.SAFETY_RISK:
+                    filtered_df = filtered_df.sort_values(by=col_name, ascending=True)
+                    applied_rules.append(f"Organized by lowest {col_name} (ASC - Safest)")
+                    sort_applied = True
+                    break
     
     result_df = filtered_df.head(limit)
 
