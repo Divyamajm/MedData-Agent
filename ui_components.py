@@ -446,8 +446,8 @@ def render_dynamic_dataset_view(df: pd.DataFrame, profile: Any, search_result: O
             options = search_result.get("clarification_options", [])
             cols = st.columns(len(options))
             for i, opt in enumerate(options):
-                if cols[i].button(opt, key=f"dyn_clarify_btn_{i}"):
-                    st.session_state["dynamic_search_input"] = opt
+                if cols[i].button(opt, key=f"dyn_clarify_btn_{i}_{abs(hash(opt)) % 100000}"):
+                    st.session_state["dynamic_search_override"] = opt
                     st.rerun()
         elif search_result.get("data") is not None:
             res_df = search_result["data"]
