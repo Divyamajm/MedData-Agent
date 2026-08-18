@@ -113,21 +113,93 @@ HOUSING_DOMAIN_KEYWORDS = [
     r"\b(livability|housing|property|properties|transit distance|safe neighborhood|best area)\b"
 ]
 
+KNOWN_CITIES = {
+    "bengaluru": "Bengaluru",
+    "bangalore": "Bengaluru",
+    "mumbai": "Mumbai",
+    "bombay": "Mumbai",
+    "delhi": "Delhi-NCR",
+    "delhi-ncr": "Delhi-NCR",
+    "ncr": "Delhi-NCR",
+    "gurgaon": "Delhi-NCR",
+    "gurugram": "Delhi-NCR",
+    "noida": "Delhi-NCR",
+    "hyderabad": "Hyderabad",
+    "secunderabad": "Hyderabad",
+    "chennai": "Chennai",
+    "madras": "Chennai"
+}
+
 KNOWN_NEIGHBORHOODS = {
+    # Bengaluru
+    "indiranagar": "Indiranagar",
+    "defence colony": "Indiranagar",
+    "koramangala": "Koramangala",
+    "hsr layout": "HSR Layout",
+    "hsr": "HSR Layout",
+    "whitefield": "Whitefield",
+    "bellandur": "Bellandur",
+    "jp nagar": "JP Nagar",
+    "malleshwaram": "Malleshwaram",
+    "hebbal": "Hebbal",
+
+    # Mumbai
+    "bandra west": "Bandra West",
+    "bandra": "Bandra West",
+    "powai": "Powai",
+    "juhu": "Juhu",
+    "andheri west": "Andheri West",
+    "andheri": "Andheri West",
+    "worli": "Worli",
+    "lower parel": "Lower Parel",
+    "dadar": "Dadar",
+    "thane west": "Thane West",
+    "thane": "Thane West",
+    "chembur": "Chembur",
+
+    # Delhi-NCR
+    "cyber city": "Cyber City",
+    "dlf": "Cyber City",
+    "greater kailash": "Greater Kailash",
+    "gk": "Greater Kailash",
+    "south delhi": "Greater Kailash",
+    "hauz khas": "Hauz Khas",
+    "vasant kunj": "Vasant Kunj",
+    "south extension": "South Extension",
+    "south ex": "South Extension",
+    "dwarka": "Dwarka",
+    "saket": "Saket",
+
+    # Hyderabad
+    "jubilee hills": "Jubilee Hills",
+    "banjara hills": "Banjara Hills",
+    "gachibowli": "Gachibowli",
+    "hitec city": "Hitec City",
+    "madhapur": "Madhapur",
+    "kondapur": "Kondapur",
+    "manikonda": "Manikonda",
+    "kukatpally": "Kukatpally",
+    "financial district": "Financial District",
+
+    # Chennai
+    "anna nagar": "Anna Nagar",
+    "adyar": "Adyar",
+    "besant nagar": "Besant Nagar",
+    "t nagar": "T. Nagar",
+    "t. nagar": "T. Nagar",
+    "omr": "OMR",
+    "velachery": "Velachery",
+    "nungambakkam": "Nungambakkam",
+    "alwarpet": "Alwarpet",
+    "porur": "Porur",
+
+    # US Benchmarks
     "pacific heights": "Pacific Heights",
     "sunset district": "Sunset District",
     "sunset": "Sunset District",
     "mission valley": "Mission Valley",
-    "mission": "Mission Valley",
     "silicon hills": "Silicon Hills",
-    "silicon": "Silicon Hills",
-    "downtown metro": "Downtown Metro",
-    "downtown": "Downtown Metro",
-    "marina bay": "Marina Bay",
-    "marina": "Marina Bay",
-    "green valley": "Green Valley",
-    "beacon hill": "Beacon Hill",
-    "highland park": "Highland Park"
+    "marina bay": "Marina Bay"
 }
 
 
@@ -145,6 +217,8 @@ def extract_negations(prompt: str) -> List[str]:
 
 def detect_domain(prompt: str, active_domain: Optional[DomainType] = None) -> DomainType:
     """Detects whether prompt is for Real Estate / Housing or Healthcare."""
+    if active_domain == DomainType.DYNAMIC_DATASET:
+        return DomainType.DYNAMIC_DATASET
     if active_domain == DomainType.REAL_ESTATE:
         return DomainType.REAL_ESTATE
     
@@ -163,10 +237,17 @@ def parse_housing_constraints(prompt: str) -> HousingSearchFilters:
     prompt_lower = prompt.lower()
     filters = HousingSearchFilters()
 
-    # 1. Price extraction ($ or numbers)
-    price_match = re.search(r"(?:under|less than|max|budget|below|up to|\$)\s*\$?(\d{3,5})", prompt_lower)
-    if price_match:
-        filters.max_price = int(price_match.group(1))
+    # 1. Price extraction (₹, Rs, Lakhs, k, $, or raw numbers)
+    lakh_match = re.search(r"(?:under|below|less than|budget|max|<=|<|\$|₹|rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|l)\b", prompt_lower)
+    k_match = re.search(r"(?:under|below|less than|budget|max|<=|<|\$|₹|rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:k|thousand)\b", prompt_lower)
+    num_match = re.search(r"(?:under|less than|max|budget|below|up to|\$|₹|rs\.?)\s*(\d{3,7})", prompt_lower)
+
+    if lakh_match:
+        filters.max_price = int(float(lakh_match.group(1)) * 100000)
+    elif k_match:
+        filters.max_price = int(float(k_match.group(1)) * 1000)
+    elif num_match:
+        filters.max_price = int(num_match.group(1))
 
     # 2. Crime index extraction
     if re.search(r"\b(very safe|ultra safe|safest|lowest crime|minimal crime)\b", prompt_lower):
@@ -214,7 +295,12 @@ def parse_housing_constraints(prompt: str) -> HousingSearchFilters:
     elif "single family" in prompt_lower:
         filters.property_type = PropertyType.SINGLE_FAMILY
 
-    # 8. Neighborhood
+    # 8. City and Neighborhood
+    for key, city_name in KNOWN_CITIES.items():
+        if key in prompt_lower:
+            filters.city = city_name
+            break
+
     for key, nbh_name in KNOWN_NEIGHBORHOODS.items():
         if key in prompt_lower:
             filters.neighborhood = nbh_name

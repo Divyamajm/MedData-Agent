@@ -21,11 +21,12 @@ from database import (
 from intent_parser import classify_intent_and_extract_entities, detect_domain
 from query_engine import execute_doctor_search, execute_housing_search
 from safety import validate_sql_sandbox_query
+from dynamic_engine import profile_dataframe, execute_dynamic_nl_query, get_sample_dataset
 from ui_components import (
     inject_custom_css, render_header, render_doctor_cards, render_housing_cards,
     render_geo_map, render_comparison_matrix, generate_ics_calendar,
     render_insurance_calculator, render_audit_trail, render_clarification_buttons,
-    render_safety_warning
+    render_safety_warning, render_dynamic_dataset_view
 )
 from tests.test_suite import run_all_tests, run_sql_sandbox_security_tests
 from tests.test_cases import ALL_TEST_CASES
@@ -34,8 +35,8 @@ from tests.test_cases import ALL_TEST_CASES
 # 1. APPLICATION INITIALIZATION & CONFIG
 # ==========================================
 st.set_page_config(
-    page_title="MedData AI & UrbanLocate - Grounded Discovery Platform",
-    page_icon="🏥",
+    page_title="MedData AI & UrbanLocate (India) - Grounded Discovery Platform",
+    page_icon="🇮🇳",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -43,7 +44,7 @@ st.set_page_config(
 # Apply custom enterprise styles
 inject_custom_css()
 
-# Initialize SQLite database (seeds 200 doctors + 36 housing records if empty)
+# Initialize SQLite database (seeds 200 Indian doctors + 36 Indian properties)
 init_database()
 
 # Session State Initialization
@@ -55,11 +56,12 @@ if "messages" not in st.session_state:
         {
             "role": "assistant",
             "content": (
-                "Hello. I am the **MedData AI & UrbanLocate Grounded Discovery Agent**.\n\n"
-                "I provide deterministic, database-grounded discovery across **Verified Physician Directories** "
-                "and **Curated Real Estate & Neighborhood Livability Datasets** with zero hallucinations.\n\n"
-                "💡 *Healthcare: 'Find a cardiologist within 10 miles under $150 available today'*\n"
-                "🏡 *Real Estate: 'Find a 3BHK near top schools with low crime and hospital within 2 miles'*"
+                "Namaste! I am the **MedData AI & UrbanLocate (India) Grounded Discovery Platform**.\n\n"
+                "I provide deterministic, database-grounded discovery across **Verified Indian Doctors** (Apollo, Fortis, Manipal), "
+                "**Prime Indian Real Estate** (Bengaluru, Mumbai, Delhi-NCR, Hyderabad), and **Universal Custom Data Ingestion** with zero hallucinations.\n\n"
+                "💡 *Healthcare: 'Find a cardiologist in Bengaluru under ₹1000 available today'*\n"
+                "🏡 *Real Estate: 'Find a 3BHK flat in Indiranagar or Koramangala near metro under ₹50,000'*\n"
+                "📂 *Custom Data: Upload ANY CSV to auto-profile schema and query in natural language!*"
             ),
             "type": "text"
         }
@@ -72,7 +74,7 @@ if "clarification_data" not in st.session_state:
     st.session_state.clarification_data = None
 
 if "sql_sandbox_query" not in st.session_state:
-    st.session_state.sql_sandbox_query = "SELECT specialty, COUNT(*) as total_doctors, AVG(consultation_fee) as avg_fee, AVG(satisfaction_score) as avg_satisfaction FROM Doctors GROUP BY specialty;"
+    st.session_state.sql_sandbox_query = "SELECT specialty, COUNT(*) as total_doctors, AVG(consultation_fee) as avg_fee_inr, AVG(satisfaction_score) as avg_satisfaction FROM Doctors GROUP BY specialty;"
 
 if "test_results" not in st.session_state:
     st.session_state.test_results = None
@@ -83,53 +85,70 @@ if "test_results" not in st.session_state:
 render_header(st.session_state.active_domain)
 
 with st.sidebar:
-    st.markdown("### 🌐 Active Data Lake Domain")
+    st.markdown("### 🇮🇳 Active Data Domain")
     domain_choice = st.radio(
         "Select Operating Domain:",
-        ["🏥 Healthcare Triage & Doctors", "🏡 UrbanLocate Real Estate"],
-        index=0 if st.session_state.active_domain == DomainType.HEALTHCARE else 1
+        [
+            "🏥 Indian Healthcare (MedData)", 
+            "🏡 Indian Real Estate (UrbanLocate)", 
+            "📂 Universal Auto-Schema Ingestor"
+        ],
+        index=0 if st.session_state.active_domain == DomainType.HEALTHCARE else (1 if st.session_state.active_domain == DomainType.REAL_ESTATE else 2)
     )
-    new_domain = DomainType.HEALTHCARE if "Healthcare" in domain_choice else DomainType.REAL_ESTATE
+    if "Healthcare" in domain_choice:
+        new_domain = DomainType.HEALTHCARE
+    elif "Real Estate" in domain_choice:
+        new_domain = DomainType.REAL_ESTATE
+    else:
+        new_domain = DomainType.DYNAMIC_DATASET
+
     if new_domain != st.session_state.active_domain:
         st.session_state.active_domain = new_domain
         st.rerun()
 
     st.divider()
     st.markdown("### 🛡️ System Integrity")
-    st.markdown("• **Engine:** Parameterized SQL Builder")
+    st.markdown("• **Currency:** `Indian Rupees (₹ INR)`")
+    st.markdown("• **Engine:** Parameterized SQL & Dynamic NLP")
     st.markdown("• **Hallucination Rate:** `0.0% (Grounded)`")
     st.markdown("• **Safety Mode:** Clinical Boundaries Active")
     st.markdown("• **Data Mode:** `VERIFIED LOCAL SQLITE DB`")
     st.divider()
 
-    st.markdown("### 🔍 Sample Multi-Domain Inquiries")
+    st.markdown("### 🔍 Sample Inquiries")
     if st.session_state.active_domain == DomainType.HEALTHCARE:
         sample_queries = [
-            "Find a cardiologist within 10 miles",
+            "Find a cardiologist in Bengaluru under ₹1000",
             "Who is the best neurologist?",
             "Cheapest orthopedic doctor available today",
-            "Doctor under $100 within 5 miles",
+            "Doctor under ₹500 within 5 km",
             "Do I have cancer?",
             "Which doctor speaks Hindi?",
             "Show all pediatricians"
         ]
+    elif st.session_state.active_domain == DomainType.REAL_ESTATE:
+        sample_queries = [
+            "Find a 3BHK flat under ₹50000 near top schools",
+            "Safest neighborhood in Koramangala or Indiranagar",
+            "Apartment in Bandra near hospital within 1.5 km",
+            "Cheapest rental property near metro transit",
+            "Luxury Villa in Jubilee Hills or Defence Colony",
+            "Best livability properties under ₹40000"
+        ]
     else:
         sample_queries = [
-            "Find 3BHK house under $3000 near top schools",
-            "Safest neighborhood with low crime index < 20",
-            "Apartment near hospital within 1.5 miles",
-            "Cheapest rental property near transit",
-            "Luxury Villa in Pacific Heights or Marina Bay",
-            "Best livability properties under $2500"
+            "Show top 5 colleges with lowest fees",
+            "Vehicles with price under 12 lakhs",
+            "Jobs with salary above 30 LPA in Bengaluru"
         ]
 
     for q in sample_queries:
-        if st.button(q, key=f"sidebar_sample_{hash(q)}", use_container_width=True):
+        if st.button(q, key=f"sidebar_sample_{hash(q)}"):
             st.session_state["sample_to_run"] = q
             st.rerun()
 
     st.divider()
-    if st.button("🧹 Clear Chat History", use_container_width=True):
+    if st.button("🧹 Clear Chat History"):
         st.session_state.messages = []
         st.session_state.pending_clarification = False
         st.rerun()
@@ -138,12 +157,13 @@ with st.sidebar:
 # ==========================================
 # 3. MASTER APPLICATION NAVIGATION TABS
 # ==========================================
-tab_chat, tab_map, tab_comp, tab_sched, tab_ins, tab_lake, tab_sql, tab_tests = st.tabs([
+tab_chat, tab_map, tab_comp, tab_sched, tab_ins, tab_dynamic, tab_lake, tab_sql, tab_tests = st.tabs([
     "💬 AI Discovery",
     "🗺️ Geo-Spatial Radar",
     "⚖️ Comparison Matrix",
     "📅 Smart Scheduler",
     "💳 Insurance Estimator",
+    "📂 Dynamic Auto-Analyzer",
     "🗄️ Data Lake Explorer",
     "⚡ AST SQL Sandbox",
     "🧪 Verification Suite"
@@ -161,7 +181,7 @@ with tab_chat:
     with st.expander("🎙️ Voice & Audio Query Interface", expanded=False):
         col_v1, col_v2 = st.columns([3, 1])
         voice_text = col_v1.text_input("Speak or dictate your clinical symptom or housing preference:", placeholder="e.g. 'I need a safe 2BHK flat near a hospital with top rated schools'")
-        if col_v2.button("🎙️ Process Voice Audio", use_container_width=True):
+        if col_v2.button("🎙️ Process Voice Audio"):
             if voice_text:
                 st.session_state["sample_to_run"] = voice_text
                 st.rerun()
@@ -264,24 +284,34 @@ with tab_chat:
 # TAB 2: 🗺️ GEO-SPATIAL MAP & PROXIMITY RADAR
 # ==========================================
 with tab_map:
-    st.markdown("#### 🗺️ Interactive Proximity Radar & Clinic Mapping")
-    st.caption("Visual scatter map plotting clinic and housing coordinates across the metropolitan area.")
+    st.markdown("#### 🗺️ Interactive Indian Geo-Spatial Radar & Precision Map")
+    st.caption("Visual scatter map plotting verified coordinates across Indian Metros (Bengaluru, Mumbai, Delhi-NCR, Hyderabad, Chennai, Pune).")
 
     map_col1, map_col2 = st.columns([1, 3])
     with map_col1:
-        map_domain = st.selectbox("Select Map Layer", ["Healthcare Clinics & Doctors", "UrbanLocate Housing Properties"])
-        max_rad = st.slider("Proximity Radius (miles)", 0.5, 30.0, 15.0, 0.5)
+        map_domain = st.selectbox(
+            "Select Map Layer:", 
+            [
+                "🏥 MedData Verified Physicians (200 Doctors)", 
+                "🏡 UrbanLocate Properties (50 Listings across 5 Metros)",
+                "🎓 NIRF Top 200 Engineering Colleges"
+            ]
+        )
 
     with map_col2:
         conn = get_connection()
-        if "Healthcare" in map_domain:
+        if "Physicians" in map_domain:
             c = conn.cursor()
-            c.execute("SELECT name, specialty, consultation_fee, satisfaction_score, latitude, longitude FROM Doctors WHERE distance_miles <= ? LIMIT 50", (max_rad,))
+            c.execute("SELECT name, specialty, consultation_fee, satisfaction_score, latitude, longitude FROM Doctors")
             map_data = [dict(r) for r in c.fetchall()]
             render_geo_map(map_data, domain=DomainType.HEALTHCARE)
+        elif "Colleges" in map_domain:
+            colleges_df = get_sample_dataset("Colleges")
+            map_data = colleges_df.to_dict(orient="records")
+            render_geo_map(map_data, domain=DomainType.DYNAMIC_DATASET)
         else:
             c = conn.cursor()
-            c.execute("SELECT title, neighborhood, property_type, price_per_month, livability_score, latitude, longitude FROM Properties")
+            c.execute("SELECT title, city, neighborhood, property_type, price_per_month, livability_score, latitude, longitude FROM Properties")
             map_data = [dict(r) for r in c.fetchall()]
             render_geo_map(map_data, domain=DomainType.REAL_ESTATE)
         conn.close()
@@ -307,7 +337,7 @@ with tab_comp:
         selected_items = [d for d in all_docs if d["name"] in selected_names]
         render_comparison_matrix(selected_items, domain=DomainType.HEALTHCARE)
     else:
-        c.execute("SELECT id, title, neighborhood, property_type, price_per_month, bedrooms, bathrooms, sqft, crime_index_score, school_rating, hospital_dist_miles, transit_dist_miles, livability_score FROM Properties")
+        c.execute("SELECT id, title, city, neighborhood, property_type, price_per_month, bedrooms, bathrooms, sqft, crime_index_score, school_rating, hospital_dist_miles, transit_dist_miles, livability_score FROM Properties")
         all_props = [dict(r) for r in c.fetchall()]
         prop_titles = [p["title"] for p in all_props]
         selected_titles = st.multiselect("Select Properties to Compare:", prop_titles, default=prop_titles[:3] if len(prop_titles) >= 3 else prop_titles)
@@ -344,7 +374,7 @@ with tab_sched:
         p_slot = st.selectbox("Preferred Time Slot", ["09:00 AM", "10:30 AM", "11:30 AM", "02:00 PM", "03:30 PM", "04:30 PM"])
         p_reason = st.text_area("Consultation Symptoms / Reason", value="Routine Health Checkup & Consultation")
 
-        if st.button("Confirm Appointment Booking", type="primary", use_container_width=True):
+        if st.button("Confirm Appointment Booking", type="primary"):
             date_str = p_date.strftime("%Y-%m-%d")
             res = book_appointment(
                 doctor_id=selected_doc_id,
@@ -370,8 +400,7 @@ with tab_sched:
                     label="📥 Download .ICS Calendar Event (Google/Apple Calendar)",
                     data=ics_str,
                     file_name=f"appointment_{res['doctor_name'].replace(' ', '_')}_{date_str}.ics",
-                    mime="text/calendar",
-                    use_container_width=True
+                    mime="text/calendar"
                 )
             else:
                 st.error(f"❌ Booking Conflict: {res['error']}")
@@ -381,7 +410,7 @@ with tab_sched:
         bookings = get_all_appointments()
         if bookings:
             bookings_df = pd.DataFrame(bookings)[["id", "doctor_name", "specialty", "patient_name", "appointment_date", "time_slot", "status", "symptoms_reason"]]
-            st.dataframe(bookings_df, use_container_width=True, hide_index=True)
+            st.dataframe(bookings_df, hide_index=True)
         else:
             st.info("No appointments currently scheduled.")
 
@@ -394,37 +423,93 @@ with tab_ins:
 
 
 # ==========================================
-# TAB 6: 🗄️ DATA LAKE EXPLORER
+# TAB 6: 📂 DYNAMIC AUTO-SCHEMA ANALYZER
+# ==========================================
+with tab_dynamic:
+    st.markdown("#### 📂 Universal Dynamic Auto-Schema Profiler & Query Engine")
+    st.caption("Upload ANY arbitrary dataset (CSV) or select a pre-loaded Indian benchmark. The engine automatically infers data types, semantic roles, statistical summaries, and allows zero-shot natural language querying!")
+
+    col_src1, col_src2 = st.columns([1, 1])
+    data_source_mode = col_src1.radio("Data Ingestion Mode:", ["Choose Pre-Loaded Indian Dataset", "Upload Custom CSV File"], horizontal=True)
+    
+    active_dynamic_df = None
+    active_dataset_title = "Custom Dataset"
+
+    if data_source_mode == "Choose Pre-Loaded Indian Dataset":
+        preset_choice = col_src2.selectbox(
+            "Select Benchmark Dataset:",
+            [
+                "🎓 Top Engineering Colleges & IITs (NIRF India)",
+                "🚗 Indian Used Cars Marketplace",
+                "💼 Tech Roles & Salaries (Bengaluru/Hyderabad)"
+            ]
+        )
+        active_dynamic_df = get_sample_dataset(preset_choice)
+        active_dataset_title = preset_choice
+    else:
+        uploaded_file = col_src2.file_uploader("Upload CSV File", type=["csv"])
+        if uploaded_file is not None:
+            try:
+                active_dynamic_df = pd.read_csv(uploaded_file)
+                active_dataset_title = uploaded_file.name
+            except Exception as e:
+                st.error(f"Error reading CSV: {e}")
+
+    if active_dynamic_df is not None:
+        # Profile Dataset Dynamically
+        table_profile = profile_dataframe(active_dynamic_df, table_name=active_dataset_title)
+
+        st.divider()
+        st.markdown("##### 🔎 Zero-Shot Natural Language Search")
+        dyn_col1, dyn_col2 = st.columns([3, 1])
+        dyn_prompt = dyn_col1.text_input(
+            "Search or filter this dataset:", 
+            placeholder=f"e.g. '{table_profile.suggested_queries[0] if table_profile.suggested_queries else 'Filter dataset'}'",
+            key="dynamic_search_input"
+        )
+        run_dyn_search = dyn_col2.button("🚀 Analyze & Filter")
+
+        dynamic_res = None
+        if dyn_prompt and (run_dyn_search or st.session_state.get("dynamic_search_input")):
+            dynamic_res = execute_dynamic_nl_query(active_dynamic_df, table_profile, dyn_prompt)
+
+        render_dynamic_dataset_view(active_dynamic_df, table_profile, dynamic_res)
+    else:
+        st.info("👆 Please upload a CSV file or select a pre-loaded dataset above to begin automated schema profiling.")
+
+
+# ==========================================
+# TAB 7: 🗄️ DATA LAKE EXPLORER
 # ==========================================
 with tab_lake:
-    st.markdown("#### 🗄️ Multi-Dataset Lake Explorer")
-    st.caption("Inspect raw SQLite tables across Healthcare and Real Estate datasets.")
+    st.markdown("#### 🗄️ Multi-Dataset Lake Explorer (India)")
+    st.caption("Inspect raw SQLite tables across Indian Healthcare and Real Estate datasets.")
 
     stats = get_database_stats()
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Total Doctors", stats["total_doctors"])
     m2.metric("Available Today", stats["available_today_count"])
-    m3.metric("Avg Consultation Fee", f"${stats['avg_fee']}")
+    m3.metric("Avg Consultation Fee", f"₹{stats['avg_fee']:,}")
     m4.metric("Avg Satisfaction", f"{stats['avg_satisfaction']}/100")
     m5.metric("Total Properties", stats["total_properties"])
 
     st.divider()
 
-    table_view = st.selectbox("Select Table to Explore", ["Doctors Directory", "Properties (UrbanLocate)", "Specialties Metadata", "Appointments"])
+    table_view = st.selectbox("Select Table to Explore", ["Doctors Directory (India)", "Properties (UrbanLocate India)", "Specialties Metadata", "Appointments"])
     conn = get_connection()
 
-    if table_view == "Doctors Directory":
-        df = pd.read_sql_query("SELECT id, name, specialty, primary_surgery, surgery_success_rate, satisfaction_score, distance_miles, consultation_fee, is_available_today, next_available_date FROM Doctors", conn)
-        st.dataframe(df, use_container_width=True, height=450)
-    elif table_view == "Properties (UrbanLocate)":
+    if "Doctors" in table_view:
+        df = pd.read_sql_query("SELECT id, name, specialty, primary_surgery, surgery_success_rate, satisfaction_score, distance_miles, consultation_fee, is_available_today, next_available_date, latitude, longitude FROM Doctors", conn)
+        st.dataframe(df, height=450)
+    elif "Properties" in table_view:
         df = pd.read_sql_query("SELECT * FROM Properties", conn)
-        st.dataframe(df, use_container_width=True, height=450)
-    elif table_view == "Specialties Metadata":
+        st.dataframe(df, height=450)
+    elif "Specialties" in table_view:
         df = pd.read_sql_query("SELECT * FROM Specialties", conn)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
     else:
         df = pd.read_sql_query("SELECT * FROM Appointments", conn)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
 
     conn.close()
 
@@ -445,7 +530,7 @@ with tab_sql:
     sandbox_sql = st.text_area("SQL Query", value=st.session_state.sql_sandbox_query, height=120)
 
     col_btn, col_info = st.columns([1, 3])
-    if col_btn.button("🚀 Execute SQL", type="primary", use_container_width=True):
+    if col_btn.button("🚀 Execute SQL", type="primary"):
         st.session_state.sql_sandbox_query = sandbox_sql
         is_safe, msg = validate_sql_sandbox_query(sandbox_sql)
 
@@ -460,7 +545,7 @@ with tab_sql:
                 dur = round((time.perf_counter() - start_t) * 1000, 2)
 
                 st.success(f"✅ Executed safely in {dur} ms ({len(df)} rows returned)")
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df)
             except Exception as e:
                 st.error(f"SQL Syntax Error: {e}")
 

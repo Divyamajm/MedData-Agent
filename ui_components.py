@@ -161,12 +161,11 @@ def render_header(domain: DomainType = DomainType.HEALTHCARE):
 
 
 def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool = True):
-    """Renders verified doctor cards with surgical metrics and formatting."""
+    """Renders verified doctor cards with surgical metrics and formatting in INR."""
     if not doctors:
         st.info("No matching doctors found.")
         return
 
-    # If large result set (e.g. 200 rows), show top 5 cards and expandable table
     cards_to_show = doctors[:5] if show_table_fallback and len(doctors) > 5 else doctors
 
     st.markdown(f"**Found {len(doctors)} matching doctor(s) from the verified database:**")
@@ -174,7 +173,8 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
     for doc in cards_to_show:
         is_avail = doc.get("is_available_today") == "Yes"
         avail_badge = '<span style="color: #22543d; background-color: #c6f6d5; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">🟢 Available Today</span>' if is_avail else f'<span style="color: #744210; background-color: #fefcbf; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">📅 Next: {doc.get("next_available_date")}</span>'
-        fee_str = "FREE ($0)" if doc.get("consultation_fee") == 0 else f"${doc.get('consultation_fee')}"
+        fee_val = doc.get('consultation_fee', 0)
+        fee_str = "FREE (₹0)" if fee_val == 0 else f"₹{fee_val:,}"
 
         card_html = textwrap.dedent(f"""
             <div class="entity-card">
@@ -189,7 +189,7 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
                 <div class="metric-grid">
                     <div class="metric-item">⭐ Satisfaction: <span class="metric-val">{doc.get('satisfaction_score')}/100</span></div>
                     <div class="metric-item">📈 Success Rate: <span class="metric-val">{doc.get('surgery_success_rate')}%</span></div>
-                    <div class="metric-item">📍 Distance: <span class="metric-val">{doc.get('distance_miles')} mi</span></div>
+                    <div class="metric-item">📍 Distance: <span class="metric-val">{doc.get('distance_miles')} km</span></div>
                     <div class="metric-item">💰 Fee: <span class="metric-val">{fee_str}</span></div>
                 </div>
             </div>
@@ -199,11 +199,11 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
     if show_table_fallback and len(doctors) > 5:
         with st.expander(f"📋 View Complete Directory Table ({len(doctors)} Doctors)"):
             df = pd.DataFrame(doctors)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, hide_index=True)
 
 
 def render_housing_cards(properties: List[Dict[str, Any]]):
-    """Renders real estate property cards with livability metrics."""
+    """Renders real estate property cards with livability metrics in INR."""
     if not properties:
         st.info("No matching properties found.")
         return
@@ -215,13 +215,14 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
         liv_badge_class = "badge-livability-high" if livability >= 85 else "badge-livability-med"
         
         crime = p.get("crime_index_score", 20)
-        if crime <= 20:
-            crime_badge = f'<span class="badge-crime-safe">🛡️ Ultra Safe ({crime}/100)</span>'
-        elif crime <= 40:
-            crime_badge = f'<span class="badge-crime-mod">⚠️ Moderate Crime ({crime}/100)</span>'
+        if crime <= 12:
+            crime_badge = f'<span class="badge-crime-safe">🛡️ Ultra Safe & Gated ({crime}/100)</span>'
+        elif crime <= 25:
+            crime_badge = f'<span class="badge-crime-mod">⚠️ Safe Neighborhood ({crime}/100)</span>'
         else:
-            crime_badge = f'<span class="badge-crime-high">🚨 High Crime ({crime}/100)</span>'
+            crime_badge = f'<span class="badge-crime-high">🚨 Moderate Crime ({crime}/100)</span>'
 
+        rent_val = p.get('price_per_month', 0)
         card_html = textwrap.dedent(f"""
             <div class="entity-card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -233,14 +234,14 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
                     <span style="color: #4a5568; font-size: 0.85rem; margin-left: 0.5rem;">• {p.get('property_type')} • <b>{p.get('bedrooms')} BHK / {p.get('bathrooms')} Bath</b> ({p.get('sqft')} sqft)</span>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item">💰 Rent: <span class="metric-val">${p.get('price_per_month')}/mo</span></div>
-                    <div class="metric-item">🏫 Schools: <span class="metric-val">{p.get('school_rating')}/10</span></div>
-                    <div class="metric-item">🏥 Hospital: <span class="metric-val">{p.get('hospital_dist_miles')} mi</span></div>
-                    <div class="metric-item">🚇 Transit: <span class="metric-val">{p.get('transit_dist_miles')} mi</span></div>
+                    <div class="metric-item">💰 Rent: <span class="metric-val">₹{rent_val:,}/mo</span></div>
+                    <div class="metric-item">🏫 CBSE/ICSE Schools: <span class="metric-val">{p.get('school_rating')}/10</span></div>
+                    <div class="metric-item">🏥 Hospital: <span class="metric-val">{p.get('hospital_dist_miles')} km</span></div>
+                    <div class="metric-item">🚇 Metro Transit: <span class="metric-val">{p.get('transit_dist_miles')} km</span></div>
                 </div>
                 <div style="margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>{crime_badge}</div>
-                    <div style="font-size: 0.8rem; color: #718096;">🛒 Shopping / Market: <b>{p.get('market_dist_miles')} mi</b></div>
+                    <div style="font-size: 0.8rem; color: #718096;">🛒 Shopping / High Street: <b>{p.get('market_dist_miles')} km</b></div>
                 </div>
             </div>
         """)
@@ -249,30 +250,58 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
     if len(properties) > 6:
         with st.expander(f"📋 View Complete Property Lake ({len(properties)} Listings)"):
             df = pd.DataFrame(properties)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, hide_index=True)
 
 
 def render_geo_map(data: List[Dict[str, Any]], domain: DomainType = DomainType.HEALTHCARE):
-    """Renders interactive latitude/longitude scatter map with pins."""
+    """Renders interactive latitude/longitude scatter map with city-level zoom and precision pins."""
     if not data:
         st.warning("No data points available to render on the map.")
         return
 
-    # Extract coordinates
+    # Metro City Center Bounding & Lat/Long Limits
+    CITY_CENTERS = {
+        "🇮🇳 All India (National Overview)": {"lat_min": 8.0, "lat_max": 35.0, "lon_min": 68.0, "lon_max": 97.0, "zoom": 4},
+        "🏙️ Bengaluru (Silicon Valley)": {"lat_min": 12.75, "lat_max": 13.15, "lon_min": 77.45, "lon_max": 77.85, "zoom": 11},
+        "🌊 Mumbai (Financial Capital)": {"lat_min": 18.85, "lat_max": 19.30, "lon_min": 72.75, "lon_max": 73.05, "zoom": 11},
+        "🏛️ Delhi-NCR (Capital Region)": {"lat_min": 28.35, "lat_max": 28.75, "lon_min": 76.95, "lon_max": 77.45, "zoom": 11},
+        "👑 Hyderabad (Cyberabad)": {"lat_min": 17.30, "lat_max": 17.55, "lon_min": 78.25, "lon_max": 78.55, "zoom": 11},
+        "🌴 Chennai (Coastal Tech Hub)": {"lat_min": 12.85, "lat_max": 13.18, "lon_min": 80.10, "lon_max": 80.32, "zoom": 11}
+    }
+
+    col_map1, col_map2 = st.columns([1, 3])
+    selected_city_focus = col_map1.selectbox(
+        "🗺️ Focus Metro Radar:",
+        list(CITY_CENTERS.keys()),
+        index=0
+    )
+
+    # Extract coordinates and sanitize
     coords = []
     for item in data:
-        if "latitude" in item and "longitude" in item:
-            coords.append({
-                "lat": float(item["latitude"]),
-                "lon": float(item["longitude"]),
-                "name": item.get("name") or item.get("title"),
-                "category": item.get("specialty") or item.get("property_type")
-            })
+        if "latitude" in item and "longitude" in item and item["latitude"] is not None and item["longitude"] is not None:
+            lat = float(item["latitude"])
+            lon = float(item["longitude"])
+            city_filter = CITY_CENTERS[selected_city_focus]
+
+            if city_filter["lat_min"] <= lat <= city_filter["lat_max"] and city_filter["lon_min"] <= lon <= city_filter["lon_max"]:
+                coords.append({
+                    "lat": lat,
+                    "lon": lon,
+                    "Name": item.get("name") or item.get("title") or item.get("College_Name"),
+                    "Location / Details": item.get("neighborhood") or item.get("specialty") or item.get("City"),
+                    "Price / Metric": f"₹{item.get('price_per_month', item.get('consultation_fee', item.get('Annual_Fees_INR', 'N/A'))):,}" if isinstance(item.get('price_per_month', item.get('consultation_fee', item.get('Annual_Fees_INR'))), (int, float)) else "N/A"
+                })
 
     if coords:
         map_df = pd.DataFrame(coords)
-        st.map(map_df, latitude="lat", longitude="lon", size=20, zoom=11, use_container_width=True)
-        st.caption(f"Displaying **{len(coords)}** verified geolocation pins across the metropolitan radius.")
+        col_map2.map(map_df[["lat", "lon"]], zoom=CITY_CENTERS[selected_city_focus]["zoom"])
+        st.caption(f"Displaying **{len(coords)}** verified Indian geolocation points in `{selected_city_focus}`.")
+
+        with st.expander(f"📍 View Geolocation Point Directory ({len(coords)} Locations)", expanded=False):
+            st.dataframe(map_df[["Name", "Location / Details", "Price / Metric", "lat", "lon"]], hide_index=True)
+    else:
+        st.info(f"No records found within the bounding coordinates of **{selected_city_focus}**. Try selecting *All India* to view all mapped points.")
 
 
 def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = DomainType.HEALTHCARE):
@@ -294,7 +323,7 @@ def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = D
                 "Availability": "Today (Yes)" if d.get("is_available_today") == "Yes" else d.get("next_available_date")
             })
         comp_df = pd.DataFrame(comp_data).set_index("Doctor Name").T
-        st.dataframe(comp_df, use_container_width=True)
+        st.dataframe(comp_df)
     else:
         comp_data = []
         for p in items:
@@ -310,7 +339,7 @@ def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = D
                 "Size": f"{p.get('bedrooms')} BHK ({p.get('sqft')} sqft)"
             })
         comp_df = pd.DataFrame(comp_data).set_index("Property").T
-        st.dataframe(comp_df, use_container_width=True)
+        st.dataframe(comp_df)
 
 
 def generate_ics_calendar(
@@ -352,43 +381,92 @@ END:VCALENDAR"""
 
 
 def render_insurance_calculator():
-    """Renders interactive patient insurance co-pay and deductible estimator."""
-    st.markdown("#### 💳 Insurance & Co-Pay Estimation Calculator")
-    st.caption("Calculate your estimated patient out-of-pocket consultation expense based on your insurance plan.")
+    """Renders interactive Indian health insurance co-pay and deductible estimator."""
+    st.markdown("#### 💳 Indian Health Insurance & OPD Co-Pay Estimator")
+    st.caption("Calculate estimated patient out-of-pocket consultation expenses across major Indian health insurance providers.")
 
     col1, col2, col3 = st.columns(3)
-    plan = col1.selectbox("Insurance Provider", [
-        "BlueCross BlueShield (In-Network)",
-        "Aetna Health (In-Network)",
-        "Cigna Healthcare (In-Network)",
-        "Medicare Part B (Standard)",
-        "Out-of-Network / Uninsured"
+    plan = col1.selectbox("Health Insurance Provider", [
+        "Star Health Comprehensive (OPD Rider)",
+        "HDFC ERGO Optima Secure (In-Network)",
+        "Care Health Supreme Plan (In-Network)",
+        "ICICI Lombard Complete Health (In-Network)",
+        "Niva Bupa ReAssure 2.0 (Cashless)",
+        "Ayushman Bharat PM-JAY (Govt Empanelled)",
+        "Self-Pay / Out-of-Pocket"
     ])
-    doc_fee = col2.number_input("Standard Consultation Fee ($)", min_value=0, max_value=1000, value=150, step=25)
-    deductible_met = col3.checkbox("Annual Deductible Met?", value=True)
+    doc_fee = col2.number_input("Doctor Consultation Fee (₹)", min_value=0, max_value=5000, value=800, step=100)
+    policy_active = col3.checkbox("Cashless Network Hospital?", value=True)
 
-    # Co-pay logic
-    if "Out-of-Network" in plan:
+    if "Self-Pay" in plan:
         copay = doc_fee
         covered = 0
-        note = "Uninsured or Out-of-Network: 100% patient responsibility."
-    elif "Medicare" in plan:
-        copay = 0 if doc_fee == 0 else int(doc_fee * 0.20)
+        note = "Self-Pay: 100% patient direct payment."
+    elif "Ayushman Bharat" in plan:
+        copay = 0
+        covered = doc_fee
+        note = "Ayushman Bharat PM-JAY covers 100% of approved treatment and OPD at empanelled centers."
+    elif policy_active:
+        copay = 0 if doc_fee == 0 else min(150, int(doc_fee * 0.10))
         covered = doc_fee - copay
-        note = "Medicare Part B covers 80% of approved consultation costs."
-    elif deductible_met:
-        copay = 0 if doc_fee == 0 else min(30, int(doc_fee * 0.15))
-        covered = doc_fee - copay
-        note = f"In-Network Specialist Co-Pay applied: Flat ${copay}."
+        note = f"Cashless In-Network OPD coverage applied. Nominal co-pay: ₹{copay}."
     else:
-        copay = int(doc_fee * 0.70)
+        copay = int(doc_fee * 0.30)
         covered = doc_fee - copay
-        note = "Deductible pending: 70% patient cost-sharing until annual limit is reached."
+        note = "Reimbursement Claim: 30% co-payment applied for non-network center."
 
     res_col1, res_col2 = st.columns(2)
-    res_col1.metric("Estimated Patient Co-Pay", f"${copay}")
-    res_col2.metric("Covered by Insurance", f"${covered}")
-    st.info(f"ℹ️ **Policy Note:** {note}")
+    res_col1.metric("Estimated Patient Co-Pay", f"₹{copay:,}")
+    res_col2.metric("Covered by Insurance", f"₹{covered:,}")
+    st.info(f"ℹ️ **Policy Summary:** {note}")
+
+
+def render_dynamic_dataset_view(df: pd.DataFrame, profile: Any, search_result: Optional[Dict[str, Any]] = None):
+    """Renders automated schema profiling, metric cards, and query results for any custom uploaded dataset."""
+    st.markdown(f"### 📂 Auto-Analyzed Dataset: **{profile.table_name}**")
+    st.markdown(f"**Inferred Domain:** `{profile.inferred_domain}` | **Total Rows:** `{profile.row_count}` | **Total Fields:** `{profile.column_count}`")
+    st.caption(profile.summary_description)
+
+    # Metric Row
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Records", f"{profile.row_count}")
+    c2.metric("Columns Profiled", f"{profile.column_count}")
+    if profile.primary_price_col and profile.primary_price_col in df.columns:
+        avg_price = df[profile.primary_price_col].mean()
+        c3.metric(f"Avg {profile.primary_price_col}", f"₹{avg_price:,.0f}" if avg_price > 100 else f"{avg_price:.1f}")
+    if profile.primary_rating_col and profile.primary_rating_col in df.columns:
+        avg_rating = df[profile.primary_rating_col].mean()
+        c4.metric(f"Avg {profile.primary_rating_col}", f"{avg_rating:.2f}")
+
+    # Display Query Results if query was run
+    if search_result and "data" in search_result:
+        res_df = search_result["data"]
+        st.markdown(f"#### 🎯 Query Results: **{len(res_df)} matches found**")
+        st.caption(f"Applied Rules: {', '.join(search_result.get('applied_rules', []))}")
+        st.dataframe(res_df, hide_index=True)
+    else:
+        st.markdown("#### 📋 Raw Dataset Preview (Top 10 Records)")
+        st.dataframe(df.head(10), hide_index=True)
+
+    # Schema & Semantic Roles Breakdown
+    with st.expander("🔍 Inferred Schema & Semantic Column Profiles", expanded=False):
+        schema_rows = []
+        for col_name, p in profile.columns.items():
+            schema_rows.append({
+                "Column Name": col_name,
+                "Inferred Role": p.semantic_role.value.replace("_", " ").title(),
+                "Data Type": p.dtype,
+                "Unique Values": p.unique_count,
+                "Sample Values": str(p.sample_values[:3])
+            })
+        st.dataframe(pd.DataFrame(schema_rows), hide_index=True)
+
+    # If coordinates exist, render map
+    if profile.has_geo_coordinates and profile.lat_column and profile.lng_column:
+        st.markdown("#### 🗺️ Spatial Geo-Distribution")
+        geo_df = df[[profile.lat_column, profile.lng_column]].dropna()
+        geo_df.columns = ["lat", "lon"]
+        st.map(geo_df, zoom=10)
 
 
 def render_audit_trail(audit: ExplainabilityAudit):
@@ -411,7 +489,7 @@ def render_clarification_buttons(options: List[str]):
     st.markdown("##### 💡 Please clarify your primary priority:")
     cols = st.columns(len(options))
     for i, opt in enumerate(options):
-        if cols[i].button(opt, key=f"clarify_btn_{i}", use_container_width=True):
+        if cols[i].button(opt, key=f"clarify_btn_{i}"):
             st.session_state["active_prompt"] = f"Find best doctor sorted by {opt}"
             st.rerun()
 

@@ -196,6 +196,11 @@ def build_safe_housing_query(filters: HousingSearchFilters) -> Tuple[str, List[A
     params: List[Any] = []
     applied_filters: Dict[str, Any] = {}
 
+    if filters.city:
+        where_clauses.append("city = ?")
+        params.append(filters.city)
+        applied_filters["city"] = filters.city
+
     if filters.neighborhood:
         where_clauses.append("neighborhood = ?")
         params.append(filters.neighborhood)

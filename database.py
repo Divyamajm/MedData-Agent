@@ -49,85 +49,103 @@ SPECIALTIES_METADATA = {
 }
 
 FIRST_NAMES = [
-    "Sarah", "Michael", "Emily", "David", "James", "Aisha", "Lucas", "Priya",
-    "Marcus", "Elena", "Daniel", "Olivia", "William", "Fatima", "Alexander", "Maya",
-    "Gabriel", "Sophia", "Benjamin", "Chloe"
+    "Ananya", "Rajesh", "Priya", "Vikram", "Neha", "Arjun", "Rohan", "Sneha",
+    "Karan", "Pooja", "Aditya", "Divya", "Suresh", "Meera", "Ramesh", "Deepak",
+    "Sunita", "Amit", "Kavita", "Sanjay"
 ]
 
 LAST_NAMES = [
-    "Chen", "Patel", "Rodriguez", "Okafor", "Smith", "Al-Mansoor", "Santos", "Sharma",
-    "Johnson", "Rostova", "Kim", "Martinez", "Lee", "Zahra", "Wright", "Lin",
-    "Taylor", "Rossi", "Hayes", "Dubois"
+    "Sharma", "Iyer", "Patel", "Verma", "Reddy", "Nair", "Malhotra", "Banerjee",
+    "Gupta", "Kulkarni", "Deshmukh", "Singhal", "Choudhury", "Mehta", "Bhatia", "Chatterjee",
+    "Menon", "Joshi", "Kapoor", "Rao"
 ]
 
-# Major medical center coordinates for realistic geo-clustering
+# Major Indian Medical Center Hubs for realistic geo-clustering (Bengaluru, Mumbai, Delhi, Hyderabad, Chennai)
 HOSPITAL_GEO_HUBS = [
-    (37.7631, -122.4578),  # Parnassus Medical Hub
-    (37.7885, -122.4215),  # Van Ness Clinical Center
-    (37.7760, -122.3980),  # Mission Bay Hospital
-    (37.7850, -122.4410),  # Mount Zion Center
-    (37.7280, -122.4350)   # Southern Heights Medical
+    (12.9592, 77.6534),  # Manipal Hospital, HAL Airport Rd, Bengaluru
+    (12.9716, 77.5946),  # Apollo Hospital, Sheshadripuram, Bengaluru
+    (19.1314, 72.8256),  # Kokilaben Dhirubhai Ambani Hospital, Mumbai
+    (28.5273, 77.2140),  # Max Super Speciality Hospital, Saket, Delhi
+    (28.4595, 77.0725),  # Fortis Memorial Research Institute, Gurugram
+    (17.4243, 78.4116),  # Apollo Health City, Jubilee Hills, Hyderabad
+    (13.0604, 80.2496)   # Apollo Hospitals, Greams Road, Chennai
 ]
 
 
 # ==========================================
-# 🏡 URBANLOCATE HOUSING SEED DATA
+# 🏡 URBANLOCATE INDIA - REAL ESTATE SEED DATA
 # ==========================================
 
 CURATED_PROPERTIES = [
-    # Pacific Heights - Ultra Safe, Elite Schools, High Price
-    ("Grand Victorian Estate", "Pacific Heights", "Luxury Villa", 4800, 4, 3.5, 3200, 12, 9.8, 1.2, 0.4, 0.3, 37.7925, -122.4355),
-    ("Alta Plaza Penthouse", "Pacific Heights", "Condo", 3600, 3, 2.0, 1850, 14, 9.6, 1.4, 0.5, 0.4, 37.7910, -122.4380),
-    ("Clay Street Modern Flat", "Pacific Heights", "Apartment", 2800, 2, 2.0, 1200, 15, 9.4, 1.1, 0.3, 0.2, 37.7900, -122.4330),
-    ("Jackson Street Brownstone", "Pacific Heights", "Townhouse", 4200, 3, 2.5, 2400, 11, 9.7, 1.5, 0.6, 0.5, 37.7930, -122.4310),
+    # -------------------------------------------------------------
+    # 🏙️ 1. BENGALURU (10 Properties - Tech Capital, Silicon Valley)
+    # -------------------------------------------------------------
+    ("100ft Road Luxury Penthouse", "Bengaluru", "Indiranagar", "Condo", 95000, 3, 3.0, 2400, 12, 9.8, 1.2, 0.4, 0.3, 12.9784, 77.6408),
+    ("Defence Colony Independent Villa", "Bengaluru", "Indiranagar", "Luxury Villa", 160000, 4, 4.0, 3800, 9, 9.9, 1.5, 0.6, 0.4, 12.9750, 77.6450),
+    ("Koramangala 4th Block Duplex", "Bengaluru", "Koramangala", "Single Family", 82000, 3, 3.0, 2200, 14, 9.6, 0.9, 0.5, 0.4, 12.9340, 77.6280),
+    ("Sony World Signal 3BHK Flat", "Bengaluru", "Koramangala", "Apartment", 48000, 3, 2.0, 1550, 15, 9.4, 1.2, 0.3, 0.2, 12.9355, 77.6240),
+    ("HSR Sector 2 Family Home", "Bengaluru", "HSR Layout", "Single Family", 55000, 3, 2.5, 2100, 11, 9.7, 1.8, 0.8, 0.5, 12.9120, 77.6450),
+    ("Prestige Tech Vista 3BHK", "Bengaluru", "Whitefield", "Condo", 48000, 3, 2.5, 1750, 16, 9.3, 1.1, 0.4, 0.5, 12.9698, 77.7499),
+    ("Green Glen Layout Lakeview 2BHK", "Bengaluru", "Bellandur", "Apartment", 34000, 2, 2.0, 1200, 18, 9.1, 1.4, 0.7, 0.3, 12.9260, 77.6762),
+    ("JP Nagar 7th Phase Garden Villa", "Bengaluru", "JP Nagar", "Luxury Villa", 115000, 4, 3.5, 3200, 10, 9.7, 1.6, 0.9, 0.6, 12.9063, 77.5857),
+    ("Margosa Road Heritage Floor", "Bengaluru", "Malleshwaram", "Townhouse", 52000, 3, 2.0, 1650, 13, 9.5, 0.8, 0.4, 0.2, 13.0031, 77.5643),
+    ("Manyata Tech Park Residency", "Bengaluru", "Hebbal", "Apartment", 38000, 2, 2.0, 1350, 17, 9.2, 1.5, 0.5, 0.4, 13.0358, 77.5970),
 
-    # Sunset District - Safe, Great Family Schools, Moderate Price
-    ("Ocean Breeze Single Family", "Sunset District", "Single Family", 2900, 3, 2.0, 1750, 14, 9.4, 0.8, 0.6, 0.5, 37.7550, -122.4850),
-    ("Noriega Sunshine Flat", "Sunset District", "Apartment", 2100, 2, 1.0, 1050, 22, 8.5, 1.2, 0.2, 0.3, 37.7535, -122.4920),
-    ("Sunset Boulevard Townhome", "Sunset District", "Townhouse", 3100, 3, 2.5, 1900, 19, 8.9, 0.9, 0.4, 0.6, 37.7500, -122.4950),
-    ("Taraval Garden Duplex", "Sunset District", "Apartment", 1850, 1, 1.0, 800, 20, 8.4, 1.5, 0.1, 0.2, 37.7420, -122.4880),
+    # -------------------------------------------------------------
+    # 🏙️ 2. MUMBAI (10 Properties - Financial Capital, Coastal Metros)
+    # -------------------------------------------------------------
+    ("Carter Road Sea-Facing Flat", "Mumbai", "Bandra West", "Apartment", 150000, 3, 3.0, 1800, 12, 9.7, 0.9, 0.5, 0.3, 19.0596, 72.8295),
+    ("Pali Hill Heritage Villa", "Mumbai", "Bandra West", "Luxury Villa", 280000, 5, 5.0, 5000, 6, 9.9, 1.2, 0.7, 0.4, 19.0680, 72.8310),
+    ("Hiranandani Gardens Heritage", "Mumbai", "Powai", "Condo", 75000, 3, 2.5, 1650, 14, 9.6, 1.0, 0.5, 0.3, 19.1190, 72.9050),
+    ("Juhu Tara Beachfront 4BHK", "Mumbai", "Juhu", "Luxury Villa", 240000, 4, 4.0, 4200, 8, 9.8, 1.3, 0.8, 0.5, 19.1075, 72.8263),
+    ("Lokhandwala Complex Luxury Flat", "Mumbai", "Andheri West", "Apartment", 68000, 3, 2.5, 1600, 16, 9.4, 0.8, 0.3, 0.2, 19.1363, 72.8277),
+    ("Sea Face Promenade Penthouse", "Mumbai", "Worli", "Condo", 210000, 4, 4.0, 3800, 9, 9.8, 1.1, 0.6, 0.4, 19.0178, 72.8178),
+    ("One Avighna Park High-Rise", "Mumbai", "Lower Parel", "Condo", 125000, 3, 3.0, 2100, 13, 9.5, 0.7, 0.2, 0.2, 18.9953, 72.8302),
+    ("Shivaji Park Heritage 2BHK", "Mumbai", "Dadar", "Apartment", 58000, 2, 2.0, 1100, 11, 9.6, 0.6, 0.3, 0.2, 19.0178, 72.8478),
+    ("Hiranandani Estate Rodas Flat", "Mumbai", "Thane West", "Apartment", 38000, 2, 2.0, 1250, 15, 9.3, 1.4, 0.7, 0.4, 19.2183, 72.9781),
+    ("Diamond Garden Premium 3BHK", "Mumbai", "Chembur", "Apartment", 62000, 3, 2.5, 1500, 14, 9.4, 1.0, 0.4, 0.3, 19.0522, 72.8994),
 
-    # Mission Valley - Vibrant, Low Transit Distance, Moderate Crime
-    ("Valencia Loft Residences", "Mission Valley", "Apartment", 2400, 2, 1.5, 1150, 48, 7.2, 0.4, 0.1, 0.1, 37.7590, -122.4215),
-    ("Dolores Park View Condo", "Mission Valley", "Condo", 3200, 2, 2.0, 1400, 35, 8.1, 0.7, 0.2, 0.2, 37.7600, -122.4260),
-    ("Mission Urban Studio", "Mission Valley", "Apartment", 1550, 1, 1.0, 650, 55, 6.8, 0.5, 0.1, 0.1, 37.7570, -122.4190),
-    ("Capp Street Artist Flat", "Mission Valley", "Apartment", 1950, 2, 1.0, 950, 52, 7.0, 0.6, 0.2, 0.2, 37.7580, -122.4180),
+    # -------------------------------------------------------------
+    # 🏙️ 3. DELHI-NCR (10 Properties - National Capital & Corporate Hubs)
+    # -------------------------------------------------------------
+    ("DLF The Aralias Penthouse", "Delhi-NCR", "Cyber City", "Condo", 165000, 4, 4.0, 4500, 14, 9.7, 0.8, 0.3, 0.3, 28.4750, 77.0900),
+    ("Golf Course Road Smart 3BHK", "Delhi-NCR", "Cyber City", "Apartment", 65000, 3, 2.5, 1950, 16, 9.5, 1.0, 0.4, 0.4, 28.4680, 77.0980),
+    ("Cyber Hub Walkable 2BHK", "Delhi-NCR", "Cyber City", "Apartment", 42000, 2, 2.0, 1250, 20, 9.2, 0.6, 0.2, 0.2, 28.4900, 77.0880),
+    ("GK-1 M-Block Luxury Floor", "Delhi-NCR", "Greater Kailash", "Townhouse", 85000, 3, 3.0, 2200, 18, 9.6, 0.7, 0.3, 0.2, 28.5520, 77.2380),
+    ("Hauz Khas Enclave Designer Flat", "Delhi-NCR", "Hauz Khas", "Apartment", 78000, 3, 2.5, 2000, 15, 9.7, 0.9, 0.4, 0.3, 28.5494, 77.2001),
+    ("Vasant Kunj Sector C Green Villa", "Delhi-NCR", "Vasant Kunj", "Luxury Villa", 130000, 4, 3.5, 3600, 12, 9.8, 1.2, 0.8, 0.5, 28.5284, 77.1554),
+    ("South Extension Part 2 Floor", "Delhi-NCR", "South Extension", "Townhouse", 68000, 3, 2.5, 1800, 17, 9.5, 0.8, 0.3, 0.2, 28.5729, 77.2208),
+    ("Noida Sector 62 Metro Connected", "Delhi-NCR", "Noida", "Apartment", 32000, 2, 2.0, 1200, 19, 9.1, 1.5, 0.3, 0.3, 28.6270, 77.3620),
+    ("Dwarka Sector 12 DDA SFS Flat", "Delhi-NCR", "Dwarka", "Apartment", 36000, 3, 2.0, 1500, 16, 9.3, 1.1, 0.4, 0.4, 28.5921, 77.0460),
+    ("Saket Anupam Complex 3BHK", "Delhi-NCR", "Saket", "Apartment", 58000, 3, 2.0, 1650, 16, 9.4, 0.6, 0.4, 0.2, 28.5244, 77.2167),
 
-    # Silicon Hills - High Tech, Top Schools, Low Crime, Higher Distance to Hospital
-    ("Tech Corridor Smart Villa", "Silicon Hills", "Luxury Villa", 5200, 4, 3.5, 3600, 8, 9.9, 4.5, 1.2, 0.8, 37.7350, -122.4480),
-    ("Innovation Ridge Townhouse", "Silicon Hills", "Townhouse", 3400, 3, 2.5, 2100, 10, 9.7, 4.8, 0.9, 1.0, 37.7320, -122.4510),
-    ("Palo Green Contemporary", "Silicon Hills", "Single Family", 4100, 3, 2.0, 2300, 9, 9.8, 5.1, 1.4, 1.2, 37.7300, -122.4550),
-    ("Silicon Vista Executive Apt", "Silicon Hills", "Apartment", 2600, 2, 2.0, 1300, 12, 9.5, 4.2, 0.8, 0.9, 37.7380, -122.4440),
+    # -------------------------------------------------------------
+    # 🏙️ 4. HYDERABAD (10 Properties - Cyberabad & Royal Heritage)
+    # -------------------------------------------------------------
+    ("Road No 36 Luxury Villa", "Hyderabad", "Jubilee Hills", "Luxury Villa", 185000, 5, 4.5, 5200, 7, 9.9, 1.1, 0.8, 0.6, 17.4320, 78.4050),
+    ("Apollo Health City 3BHK Flat", "Hyderabad", "Jubilee Hills", "Condo", 58000, 3, 2.5, 2100, 9, 9.7, 0.4, 0.5, 0.4, 17.4260, 78.4140),
+    ("Banjara Hills Road No 12 Floor", "Hyderabad", "Banjara Hills", "Townhouse", 72000, 3, 3.0, 2400, 10, 9.7, 0.8, 0.6, 0.3, 17.4156, 78.4357),
+    ("My Home Bhooja Sky Mansion", "Hyderabad", "Hitec City", "Condo", 90000, 3, 3.0, 2600, 11, 9.6, 0.9, 0.3, 0.3, 17.4483, 78.3813),
+    ("Gachibowli Stadium Road 2BHK", "Hyderabad", "Gachibowli", "Apartment", 32000, 2, 2.0, 1250, 14, 9.3, 1.3, 0.5, 0.4, 17.4401, 78.3489),
+    ("Madhapur Inorbit Mall Flat", "Hyderabad", "Madhapur", "Apartment", 45000, 3, 2.0, 1700, 15, 9.4, 1.0, 0.3, 0.2, 17.4486, 78.3908),
+    ("Botanical Garden Road 3BHK", "Hyderabad", "Kondapur", "Apartment", 42000, 3, 2.0, 1600, 13, 9.5, 1.2, 0.6, 0.4, 17.4699, 78.3578),
+    ("Lanco Hills Luxury Apartment", "Hyderabad", "Manikonda", "Condo", 38000, 3, 2.5, 1850, 16, 9.2, 1.5, 0.8, 0.5, 17.4022, 78.3845),
+    ("KPHB 9th Phase Gated 2BHK", "Hyderabad", "Kukatpally", "Apartment", 26000, 2, 2.0, 1150, 18, 9.0, 1.6, 0.4, 0.3, 17.4948, 78.3996),
+    ("Financial District High-Rise", "Hyderabad", "Financial District", "Condo", 62000, 3, 2.5, 2050, 10, 9.7, 1.0, 0.7, 0.5, 17.4150, 78.3450),
 
-    # Downtown Metro - High Walkability/Transit, Hospital Adjacent, Higher Crime
-    ("Metropolitan Tower Luxury", "Downtown Metro", "Condo", 3100, 2, 2.0, 1350, 68, 6.5, 0.3, 0.1, 0.1, 37.7870, -122.4080),
-    ("Market Street Central Loft", "Downtown Metro", "Apartment", 2250, 1, 1.0, 850, 72, 6.0, 0.2, 0.1, 0.1, 37.7850, -122.4120),
-    ("SOMA Tech Hub Flat", "Downtown Metro", "Apartment", 2700, 2, 2.0, 1200, 62, 6.8, 0.6, 0.1, 0.2, 37.7810, -122.4050),
-    ("Financial District Penthouse", "Downtown Metro", "Condo", 4500, 3, 3.0, 2200, 58, 7.1, 0.5, 0.1, 0.1, 37.7930, -122.4000),
-
-    # Marina Bay - Scenic, Very Safe, Premium Water Views
-    ("Marina Green View Flat", "Marina Bay", "Apartment", 3400, 2, 2.0, 1400, 16, 9.1, 1.8, 0.4, 0.3, 37.8040, -122.4380),
-    ("Chestnut Street Townhome", "Marina Bay", "Townhouse", 3900, 3, 2.5, 2100, 14, 9.3, 1.9, 0.3, 0.2, 37.8010, -122.4400),
-    ("Yacht Harbor Luxury Villa", "Marina Bay", "Luxury Villa", 6500, 5, 4.0, 4200, 10, 9.5, 2.1, 0.6, 0.4, 37.8060, -122.4420),
-    ("Bayview Terrace Condo", "Marina Bay", "Condo", 2950, 2, 1.5, 1150, 18, 8.9, 1.7, 0.5, 0.3, 37.8020, -122.4350),
-
-    # Green Valley - Affordable, Suburban, Family Friendly
-    ("Meadow Lane Family Home", "Green Valley", "Single Family", 2300, 3, 2.0, 1800, 24, 8.2, 2.5, 1.1, 0.8, 37.7180, -122.4650),
-    ("Valley View Quiet Apartment", "Green Valley", "Apartment", 1600, 2, 1.0, 950, 26, 7.9, 2.8, 0.9, 0.7, 37.7150, -122.4680),
-    ("Cedar Ridge Townhouse", "Green Valley", "Townhouse", 2500, 3, 2.0, 1650, 22, 8.3, 2.3, 1.0, 0.9, 37.7200, -122.4620),
-    ("Greenfield Budget Studio", "Green Valley", "Apartment", 1250, 1, 1.0, 550, 28, 7.5, 3.1, 0.8, 0.6, 37.7120, -122.4710),
-
-    # Beacon Hill - Historic, Safe, Highly Walkable
-    ("Heritage Brick Residence", "Beacon Hill", "Townhouse", 3700, 3, 2.5, 2200, 18, 9.2, 1.0, 0.3, 0.2, 37.7780, -122.4320),
-    ("Pinckney Historic Flat", "Beacon Hill", "Apartment", 2500, 2, 1.5, 1100, 20, 9.0, 1.1, 0.2, 0.2, 37.7790, -122.4350),
-    ("Charles Street Terrace", "Beacon Hill", "Condo", 3300, 2, 2.0, 1500, 17, 9.3, 0.9, 0.2, 0.1, 37.7810, -122.4300),
-    ("Beacon Summit Villa", "Beacon Hill", "Luxury Villa", 5600, 4, 3.5, 3400, 15, 9.4, 1.3, 0.4, 0.3, 37.7760, -122.4360),
-
-    # Highland Park - High Elevation, Panoramic Views, Very Quiet
-    ("Highland View Single Family", "Highland Park", "Single Family", 3100, 3, 2.0, 2000, 16, 8.7, 2.2, 1.3, 1.0, 37.7420, -122.4280),
-    ("Crestline Luxury Home", "Highland Park", "Single Family", 4400, 4, 3.0, 2900, 12, 9.0, 2.5, 1.5, 1.2, 37.7400, -122.4310),
-    ("Skyline Ridge Condo", "Highland Park", "Condo", 2750, 2, 2.0, 1300, 18, 8.6, 2.0, 1.1, 0.9, 37.7450, -122.4250),
-    ("Highland Garden Apartment", "Highland Park", "Apartment", 1950, 2, 1.0, 980, 20, 8.4, 2.1, 1.0, 0.8, 37.7470, -122.4230)
+    # -------------------------------------------------------------
+    # 🏙️ 5. CHENNAI (10 Properties - Coastal IT Hub & Cultural Belt)
+    # -------------------------------------------------------------
+    ("Anna Nagar 2nd Avenue 3BHK", "Chennai", "Anna Nagar", "Apartment", 42000, 3, 2.0, 1600, 12, 9.6, 0.9, 0.3, 0.2, 13.0850, 80.2100),
+    ("Tower Park View Luxury Villa", "Chennai", "Anna Nagar", "Luxury Villa", 110000, 4, 3.5, 3400, 9, 9.8, 1.2, 0.4, 0.3, 13.0880, 80.2150),
+    ("Adyar Riverview Luxury Flat", "Chennai", "Adyar", "Condo", 68000, 3, 2.5, 1900, 10, 9.7, 0.7, 0.5, 0.3, 13.0012, 80.2565),
+    ("Besant Nagar Beachfront 3BHK", "Chennai", "Besant Nagar", "Apartment", 75000, 3, 3.0, 2100, 8, 9.8, 1.1, 0.6, 0.4, 13.0002, 80.2667),
+    ("T. Nagar Pondy Bazaar 2BHK", "Chennai", "T. Nagar", "Apartment", 34000, 2, 2.0, 1200, 17, 9.3, 0.8, 0.2, 0.1, 13.0418, 80.2341),
+    ("OMR Express IT Corridor 3BHK", "Chennai", "OMR", "Apartment", 36000, 3, 2.0, 1550, 16, 9.2, 1.4, 0.5, 0.4, 12.9360, 80.2300),
+    ("Phoenix MarketCity Flat", "Chennai", "Velachery", "Apartment", 32000, 2, 2.0, 1250, 15, 9.3, 1.2, 0.4, 0.2, 12.9759, 80.2212),
+    ("Kothari Road Prime Bungalow", "Chennai", "Nungambakkam", "Luxury Villa", 145000, 4, 4.0, 3800, 9, 9.8, 0.9, 0.5, 0.3, 13.0569, 80.2425),
+    ("TTK Road Heritage Townhouse", "Chennai", "Alwarpet", "Townhouse", 58000, 3, 2.5, 1850, 11, 9.6, 0.7, 0.4, 0.3, 13.0336, 80.2505),
+    ("DLF IT Park Walkable 2BHK", "Chennai", "Porur", "Apartment", 24000, 2, 2.0, 1100, 16, 9.1, 1.5, 0.6, 0.4, 13.0382, 80.1565)
 ]
 
 
@@ -277,6 +295,7 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
         CREATE TABLE IF NOT EXISTS Properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
+            city TEXT NOT NULL,
             neighborhood TEXT NOT NULL,
             property_type TEXT NOT NULL,
             price_per_month INTEGER NOT NULL,
@@ -294,6 +313,33 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
         )
     """)
 
+    c.execute("PRAGMA table_info(Properties)")
+    prop_cols = [col[1] for col in c.fetchall()]
+    if "city" not in prop_cols:
+        c.execute("DROP TABLE IF EXISTS Properties")
+        c.execute("""
+            CREATE TABLE Properties (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                city TEXT NOT NULL,
+                neighborhood TEXT NOT NULL,
+                property_type TEXT NOT NULL,
+                price_per_month INTEGER NOT NULL,
+                bedrooms INTEGER NOT NULL,
+                bathrooms REAL NOT NULL,
+                sqft INTEGER NOT NULL,
+                crime_index_score INTEGER NOT NULL,
+                school_rating REAL NOT NULL,
+                hospital_dist_miles REAL NOT NULL,
+                transit_dist_miles REAL NOT NULL,
+                market_dist_miles REAL NOT NULL,
+                livability_score INTEGER NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL
+            )
+        """)
+        force_reset = True
+
     # 5. Performance Indexes
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_specialty ON Doctors(specialty);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_fee ON Doctors(consultation_fee);")
@@ -302,6 +348,7 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_satisfaction ON Doctors(satisfaction_score);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_success ON Doctors(surgery_success_rate);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_appointments_slot ON Appointments(doctor_id, appointment_date, time_slot);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_properties_city ON Properties(city);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_properties_price ON Properties(price_per_month);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_properties_crime ON Properties(crime_index_score);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_properties_school ON Properties(school_rating);")
@@ -349,18 +396,19 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
             satisfaction = rng.randint(72, 99)
             success_rate = round(rng.uniform(88.0, 99.8), 1)
             distance = round(rng.uniform(0.4, 28.5), 1)
-            fee = rng.choice([0, 50, 75, 100, 150, 200, 300, 500])
+            fee = rng.choice([0, 400, 500, 700, 800, 1000, 1200, 1500, 2000, 2500, 3000])
             
             is_today = rng.choice(["Yes", "No"])
             if is_today == "Yes":
                 next_date = base_date.strftime("%Y-%m-%d")
             else:
-                next_date = (base_date + timedelta(days=rng.randint(1, 14))).strftime("%Y-%m-%d")
+                days_ahead = rng.randint(1, 5)
+                next_date = (base_date + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
             
-            # Select random hospital hub with realistic coordinate jitter (± 0.02 deg)
+            # Select random hospital hub with realistic coordinate jitter (± 0.045 deg)
             hub_lat, hub_lng = rng.choice(HOSPITAL_GEO_HUBS)
-            doc_lat = round(hub_lat + rng.uniform(-0.025, 0.025), 5)
-            doc_lng = round(hub_lng + rng.uniform(-0.025, 0.025), 5)
+            doc_lat = round(hub_lat + rng.uniform(-0.045, 0.045), 4)
+            doc_lng = round(hub_lng + rng.uniform(-0.045, 0.045), 4)
 
             dummy_doctors.append((
                 i, name, specialty, surgery, success_rate, satisfaction, 
@@ -378,18 +426,18 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
         # Seed Curated Properties with Livability Scores
         dummy_properties = []
         for p in CURATED_PROPERTIES:
-            title, nbh, ptype, price, beds, baths, sqft, crime, school, hosp_d, trans_d, mkt_d, lat, lng = p
+            title, city, nbh, ptype, price, beds, baths, sqft, crime, school, hosp_d, trans_d, mkt_d, lat, lng = p
             livability = calculate_livability_score(crime, school, hosp_d, trans_d)
             dummy_properties.append((
-                title, nbh, ptype, price, beds, baths, sqft, crime, school, hosp_d, trans_d, mkt_d, livability, lat, lng
+                title, city, nbh, ptype, price, beds, baths, sqft, crime, school, hosp_d, trans_d, mkt_d, livability, lat, lng
             ))
 
         c.executemany("""
             INSERT INTO Properties (
-                title, neighborhood, property_type, price_per_month, bedrooms, bathrooms,
+                title, city, neighborhood, property_type, price_per_month, bedrooms, bathrooms,
                 sqft, crime_index_score, school_rating, hospital_dist_miles, transit_dist_miles,
                 market_dist_miles, livability_score, latitude, longitude
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, dummy_properties)
 
         # Seed 3 Sample Confirmed Appointments

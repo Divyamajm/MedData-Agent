@@ -287,7 +287,7 @@ ALL_TEST_CASES: List[TestCase] = [
         id="TC27",
         category="Housing Discovery",
         description="Search for 3BHK housing near top schools under budget",
-        input_prompt="Find a 3BHK house under $3000 near top schools",
+        input_prompt="Find a 3BHK flat under ₹60000 near top schools",
         expected_intent=IntentType.HOUSING_SEARCH,
         expected_min_results=1,
         notes="Multi-constraint real estate search with price and school constraints."
@@ -313,10 +313,31 @@ ALL_TEST_CASES: List[TestCase] = [
     TestCase(
         id="TC30",
         category="Housing Discovery",
-        description="Search for luxury villa in Pacific Heights",
-        input_prompt="Luxury Villa in Pacific Heights",
+        description="Search for luxury villa in Indiranagar or Bandra",
+        input_prompt="Luxury Villa in Indiranagar",
         expected_intent=IntentType.HOUSING_SEARCH,
         expected_min_results=1,
-        notes="Property type and neighborhood search."
+        notes="Property type and neighborhood search in India."
+    ),
+
+    # Category 13: Indian Grounded Discovery
+    TestCase(
+        id="TC31",
+        category="India Localization",
+        description="Search for 3BHK flat under ₹60,000 in Koramangala or Indiranagar",
+        input_prompt="Find a 3BHK flat in Koramangala under ₹60000",
+        expected_intent=IntentType.HOUSING_SEARCH,
+        expected_min_results=1,
+        notes="Indian locality and INR currency parsing."
+    ),
+    TestCase(
+        id="TC32",
+        category="India Localization",
+        description="Search for Indian cardiologist with INR fee under ₹1500",
+        input_prompt="Find a cardiologist under ₹1500 available today",
+        expected_intent=IntentType.AVAILABILITY,
+        expected_specialty=CanonicalSpecialty.CARDIOLOGY,
+        expected_min_results=1,
+        notes="Indian doctor discovery with ₹ INR constraint and availability."
     )
 ]

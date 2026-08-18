@@ -12,6 +12,7 @@ class DomainType(str, Enum):
     """Active data domain in the discovery platform."""
     HEALTHCARE = "healthcare"
     REAL_ESTATE = "real_estate"
+    DYNAMIC_DATASET = "dynamic_dataset"
 
 
 # ==========================================
@@ -62,6 +63,7 @@ class IntentType(str, Enum):
     AMBIGUOUS = "ambiguous"
     PROMPT_INJECTION = "prompt_injection"
     HOUSING_SEARCH = "housing_search"
+    DYNAMIC_SEARCH = "dynamic_search"
     UNSUPPORTED = "unsupported"
 
 
@@ -165,13 +167,14 @@ class HousingSortMetric(str, Enum):
 
 class HousingSearchFilters(BaseModel):
     """Validated filter set for querying the Properties / Housing table."""
+    city: Optional[str] = Field(default=None, description="City name filter (e.g. Bengaluru, Mumbai, Delhi-NCR, Hyderabad, Chennai)")
     neighborhood: Optional[str] = Field(default=None, description="Neighborhood name filter")
     property_type: Optional[PropertyType] = Field(default=None, description="Property type")
-    max_price: Optional[int] = Field(default=None, ge=0, description="Max monthly rent or price in USD ($)")
+    max_price: Optional[int] = Field(default=None, ge=0, description="Max monthly rent or price in INR (₹)")
     max_crime_index: Optional[int] = Field(default=None, ge=0, le=100, description="Max crime index (0-100, lower is safer)")
     min_school_rating: Optional[float] = Field(default=None, ge=1.0, le=10.0, description="Min school rating (1-10)")
-    max_hospital_distance: Optional[float] = Field(default=None, ge=0.0, description="Max distance to nearest hospital in miles")
-    max_transit_distance: Optional[float] = Field(default=None, ge=0.0, description="Max distance to public transit in miles")
+    max_hospital_distance: Optional[float] = Field(default=None, ge=0.0, description="Max distance to nearest hospital in km")
+    max_transit_distance: Optional[float] = Field(default=None, ge=0.0, description="Max distance to public transit in km")
     min_bedrooms: Optional[int] = Field(default=None, ge=1, le=10, description="Minimum number of bedrooms")
     min_livability_score: Optional[int] = Field(default=None, ge=0, le=100, description="Minimum overall composite livability score")
     sort_by: Optional[HousingSortMetric] = Field(default=HousingSortMetric.LIVABILITY_SCORE, description="Sort column")
@@ -183,6 +186,7 @@ class PropertyRecord(BaseModel):
     """Database representation of a verified property / neighborhood record."""
     id: int
     title: str
+    city: str = "Bengaluru"
     neighborhood: str
     property_type: str
     price_per_month: int
@@ -191,8 +195,8 @@ class PropertyRecord(BaseModel):
     sqft: int
     crime_index_score: int          # 0-100 (lower is safer)
     school_rating: float            # 1.0 - 10.0 (higher is better)
-    hospital_dist_miles: float      # distance in miles
-    transit_dist_miles: float       # distance in miles
+    hospital_dist_miles: float      # distance in km
+    transit_dist_miles: float       # distance in km
     market_dist_miles: float        # distance to shopping/grocery
     livability_score: int           # Computed 0-100 composite score
     latitude: float

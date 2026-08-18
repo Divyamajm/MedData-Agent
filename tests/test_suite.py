@@ -182,5 +182,9 @@ def print_cli_test_report():
 
 
 if __name__ == "__main__":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
     success = print_cli_test_report()
     sys.exit(0 if success else 1)
