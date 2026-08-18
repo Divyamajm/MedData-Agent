@@ -3,8 +3,8 @@
 # 🏥 MedData AI
 ### Enterprise Clinical Triage, Doctor Discovery & SQL Grounding Engine
 
+[![Live App](https://img.shields.io/badge/Live%20Demo-meddata--divyam.streamlit.app-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://meddata-divyam.streamlit.app/)
 [![Python Version](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Streamlit App](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Pydantic Validation](https://img.shields.io/badge/Pydantic-v2.0-E92063?style=for-the-badge&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![SQLite Database](https://img.shields.io/badge/SQLite-Indexed%20DB-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Test Suite](https://img.shields.io/badge/Test%20Suite-26%2F26%20Passed%20(100%25)-2ea44f?style=for-the-badge&logo=githubactions&logoColor=white)]()
@@ -16,9 +16,10 @@
   Eliminates fragile keyword routing and arbitrary SQL hallucinations through schema validation, AST security, and strict database grounding.
 </p>
 
+[🚀 **Try Live Demo**](https://meddata-divyam.streamlit.app/) •
 [Key Features](#-key-features) •
 [Architecture](#-system-architecture) •
-[Security & Safety](#-medical-safety--guardrails) •
+[Security & Safety](#-vulnerability--bug-remediation-report) •
 [Vulnerabilities Fixed](#-vulnerability--bug-remediation-report) •
 [Test Suite](#-automated-verification-suite) •
 [Quickstart](#-quickstart-guide)
