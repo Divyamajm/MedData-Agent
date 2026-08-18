@@ -13,6 +13,7 @@ notebooks/chroma.sqlite3
 dist
 .env
 *.sqlite
+*.db
 htmlcov
 chroma.sqlite3
 *.bin
