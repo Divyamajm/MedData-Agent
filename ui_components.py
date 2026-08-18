@@ -482,13 +482,6 @@ def render_dynamic_dataset_view(df: pd.DataFrame, profile: Any, search_result: O
             })
         st.dataframe(pd.DataFrame(schema_rows), hide_index=True)
 
-    # If coordinates exist, render map
-    if profile.has_geo_coordinates and profile.lat_column and profile.lng_column:
-        st.markdown("#### 🗺️ Spatial Geo-Distribution")
-        geo_df = df[[profile.lat_column, profile.lng_column]].dropna()
-        geo_df.columns = ["lat", "lon"]
-        st.map(geo_df, zoom=10)
-
 
 def render_audit_trail(audit: ExplainabilityAudit):
     """Renders the Explainability Audit Trail dropdown panel."""
