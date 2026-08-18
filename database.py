@@ -190,6 +190,9 @@ def get_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     return conn
 
+# Alias for standard naming
+get_db_connection = get_connection
+
 
 def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
     """
@@ -618,3 +621,6 @@ def get_database_stats(db_path: str = DB_PATH) -> Dict[str, Any]:
 def reset_demo_data(db_path: str = DB_PATH) -> None:
     """Explicitly resets and re-seeds both Healthcare and Housing datasets."""
     init_database(db_path=db_path, force_reset=True)
+
+# Standard alias
+initialize_database = init_database

@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test:
-    name: Run Automated Test Batteries, Security Checks & Scientific Evals
+    name: Run Automated Pytest Suites, Verification Batteries & Scientific Evals
     runs-on: ubuntu-latest
 
     steps:
@@ -31,10 +31,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Execute Pytest Suite (45 Tests)
+        run: |
+          pytest -v
+
       - name: Execute MedData 32-Test Core Verification Battery
         run: |
           python -m tests.test_suite
 
-      - name: Execute MedData 265-Query Scientific Evaluation Benchmark
+      - name: Execute MedData 290-Query Scientific Evaluation Benchmark
         run: |
           python -m tests.eval_benchmark

@@ -39,9 +39,9 @@ MEDICAL_DIAGNOSIS_PATTERNS = [
 
 # Patterns indicating an active life-threatening emergency
 ACUTE_EMERGENCY_PATTERNS = [
-    r"\b(i am having|i'm having|experiencing)\s+(a heart attack|severe chest pain|a stroke|an emergency|severe bleeding|trouble breathing|difficulty breathing|shortness of breath)\b",
-    r"\b(help me i am dying|i can't breathe|cannot breathe|unconscious|not responding|collapsed|severe allergic reaction|anaphylaxis|anaphylactic)\b",
-    r"\b(emergency right now|life threatening|urgent emergency|arterial bleeding|choking|slurred speech stroke|swallowed poison|poison chemical|head trauma bleeding|uncontrollable seizure)\b"
+    r"\b(i am having|i'm having|experiencing|having a|having)\s+(a heart attack|severe chest pain|a stroke|an emergency|severe bleeding|trouble breathing|difficulty breathing|shortness of breath|heart attack right now|stroke)\b",
+    r"\b(help me i am dying|i can't breathe|cannot breathe|unconscious|not responding|collapsed|lost consciousness|severe allergic reaction|anaphylaxis|anaphylactic)\b",
+    r"\b(emergency right now|life threatening|urgent emergency|arterial bleeding|choking|slurred speech stroke|swallowed poison|poison chemical|head trauma bleeding|uncontrollable seizure|uncontrolled bleeding|heavy bleeding|bleeding heavily)\b"
 ]
 
 # Patterns asking for healthcare attributes that do NOT exist in our SQLite schema
@@ -61,8 +61,11 @@ PROMPT_INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?(previous|your|the)\s+(instructions|rules|filters)",
     r"disregard\s+(the\s+)?(prompt|system|guidelines|what you were told)",
     r"show\s+(me\s+)?(all\s+)?(database\s+)?secrets",
-    r"bypass\s+(the\s+)?(guardrails|filters|sql)",
+    r"bypass\s+(the\s+)?(guardrails|filters|sql|safety\s+filters)",
     r"give\s+me\s+(the\s+)?raw\s+sql",
+    r"system\s+override",
+    r"drop\s+all\s+tables",
+    r"output\s+raw\s+database\s+secrets",
     r"you\s+are\s+now\s+(in\s+)?dan(\s+mode)?",
     r"jailbreak",
     r"sqlite_master",

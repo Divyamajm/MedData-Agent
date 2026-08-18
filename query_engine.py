@@ -373,3 +373,6 @@ def generate_relaxation_suggestions(filters: SearchFilters, db_path: str = DB_PA
             })
 
     return suggestions
+
+# Standard alias
+execute_query = execute_doctor_search

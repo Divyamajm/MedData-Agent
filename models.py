@@ -292,6 +292,7 @@ class ExplainabilityAudit(BaseModel):
 
 class TestCase(BaseModel):
     """Automated test case definition."""
+    __test__ = False
     id: str
     category: str
     description: str
@@ -309,6 +310,7 @@ class TestCase(BaseModel):
 
 class TestCaseResult(BaseModel):
     """Result of running an individual test case."""
+    __test__ = False
     test_case: TestCase
     actual_intent: IntentType
     actual_ambiguity: bool
