@@ -264,7 +264,7 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
             st.dataframe(df, hide_index=True)
 
 
-def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = DomainType.HEALTHCARE, custom_title_col: Optional[str] = None):
+def render_comparison_matrix(items: List[Dict[str, Any]], domain: DomainType = DomainType.HEALTHCARE, custom_title_col: Optional[str] = None, *args, **kwargs):
     """Renders a side-by-side head-to-head comparison table for selected items across Healthcare, Real Estate, or Any Imported CSV."""
     if not items:
         st.info("Select 2 or more items to view the side-by-side comparison matrix.")

@@ -23,6 +23,9 @@ from intent_parser import classify_intent_and_extract_entities, detect_domain
 from query_engine import execute_doctor_search, execute_housing_search
 from safety import validate_sql_sandbox_query
 from dynamic_engine import profile_dataframe, execute_dynamic_nl_query, get_sample_dataset
+import ui_components
+import importlib
+importlib.reload(ui_components)
 from ui_components import (
     inject_custom_css, render_header, render_doctor_cards, render_housing_cards,
     render_comparison_matrix, generate_ics_calendar,
