@@ -19,7 +19,7 @@ from database import (
     init_database, get_connection, get_database_stats, reset_demo_data,
     book_appointment, get_all_appointments, check_appointment_conflict, DB_PATH
 )
-from intent_parser import classify_intent_and_extract_entities, detect_domain
+from intent_parser import classify_intent_and_extract_entities, detect_domain, parse_user_intent_hybrid
 from query_engine import execute_doctor_search, execute_housing_search
 from safety import validate_sql_sandbox_query
 from dynamic_engine import profile_dataframe, execute_dynamic_nl_query, get_sample_dataset
@@ -33,6 +33,7 @@ from ui_components import (
 )
 from tests.test_suite import run_all_tests, run_sql_sandbox_security_tests
 from tests.test_cases import ALL_TEST_CASES
+from tests.eval_benchmark import run_full_evaluation_benchmark
 
 # ==========================================
 # 1. APPLICATION INITIALIZATION & CONFIG
@@ -170,6 +171,20 @@ with tab_chat:
     st.markdown("#### 🔍 Natural Language Grounded Assistant")
     st.caption("Ask questions in natural language. Queries are parsed deterministically into schema-validated SQL with 100% database grounding.")
 
+    col_eng1, col_eng2 = st.columns([1, 1])
+    with col_eng1:
+        engine_mode = st.radio(
+            "🧠 Parsing Engine:",
+            ["⚡ Deterministic AST (<3ms)", "🤖 Bounded LLM (Structured JSON)"],
+            horizontal=True,
+            key="ui_engine_mode"
+        )
+    with col_eng2:
+        if "Bounded LLM" in engine_mode:
+            llm_key_input = st.text_input("🔑 API Key (Optional if GEMINI_API_KEY set in env):", type="password", key="ui_llm_key")
+        else:
+            st.caption("⚡ **Grounded Rule Engine**: Zero-latency (<3ms), deterministic AST compilation, 0.0% AI hallucination.")
+
     # Voice / Audio Query Live Web Speech API & Dictation
     with st.expander("🎙️ Live Voice Triage (Native Web Speech API & Dictation)", expanded=False):
         render_voice_mic_component()
@@ -180,23 +195,26 @@ with tab_chat:
                 st.session_state["sample_to_run"] = voice_text
                 st.rerun()
 
-    # Render Chat History
-    for msg_idx, msg in enumerate(st.session_state.messages):
-        with st.chat_message(msg["role"]):
-            if msg.get("type") == "text":
-                st.markdown(msg["content"])
+    # Render Active Chat Thread
+    chat_container = st.container()
+    with chat_container:
+        for msg_idx, msg in enumerate(st.session_state.messages):
+            if msg["role"] == "user":
+                with st.chat_message("user"):
+                    st.write(msg["content"])
             elif msg.get("type") == "cards":
-                if msg.get("domain") == DomainType.REAL_ESTATE:
-                    render_housing_cards(msg["data"])
-                else:
-                    render_doctor_cards(msg["data"])
-                if "audit" in msg:
-                    render_audit_trail(msg["audit"])
-                
-                # 📄 1-Click Export Report Button
-                if msg.get("data"):
+                with st.chat_message("assistant"):
+                    if msg.get("domain") == DomainType.REAL_ESTATE:
+                        render_housing_cards(msg["data"])
+                    else:
+                        render_doctor_cards(msg["data"])
+                    
+                    if "audit" in msg:
+                        render_audit_trail(msg["audit"])
+
+                    # 1-Click Executive Report Generation
                     rep_html = generate_html_report(
-                        title=f"Verified Triage Brief ({msg.get('domain', DomainType.HEALTHCARE).value.title()})",
+                        title="MedData Executive Clinical & Discovery Brief",
                         domain=msg.get("domain", DomainType.HEALTHCARE).value.upper(),
                         records=msg["data"],
                         audit_trail=msg.get("audit")
@@ -209,7 +227,8 @@ with tab_chat:
                         key=f"dl_msg_rep_{msg_idx}_{abs(hash(str(msg['data'][:1]))) % 1000000}"
                     )
             elif msg.get("type") == "warning":
-                render_safety_warning(msg.get("warning_type", "general"), msg["content"])
+                with st.chat_message("assistant"):
+                    render_safety_warning(msg.get("warning_type", "general"), msg["content"])
 
     # Ambiguity clarification dialog
     if st.session_state.pending_clarification and st.session_state.clarification_data:
@@ -227,8 +246,15 @@ with tab_chat:
         # Append User Message
         st.session_state.messages.append({"role": "user", "content": user_prompt, "type": "text"})
 
-        # Step 1: Deterministic Parsing
-        parsed_result = classify_intent_and_extract_entities(user_prompt, active_domain=st.session_state.active_domain)
+        # Step 1: Hybrid Dual-Engine Parsing
+        engine_type = "llm" if "Bounded LLM" in st.session_state.get("ui_engine_mode", "") else "deterministic"
+        key_val = st.session_state.get("ui_llm_key") or os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        
+        parsed_result, engine_name_used, parse_latency = parse_user_intent_hybrid(
+            user_prompt,
+            engine=engine_type,
+            api_key=key_val
+        )
 
         # Step 2: Handle Guardrails & Refusals
         if parsed_result.intent == IntentType.PROMPT_INJECTION:
@@ -572,11 +598,12 @@ with tab_developer:
     st.markdown("#### ⚡ Enterprise Data Lake, SQL Sandbox & Verification Suite")
     st.caption("Inspect raw SQLite tables, test read-only SQL AST compilation, monitor real-time query latency, and run automated test batteries.")
 
-    subtab_lake, subtab_sql, subtab_telemetry, subtab_tests = st.tabs([
+    subtab_lake, subtab_sql, subtab_telemetry, subtab_tests, subtab_benchmark = st.tabs([
         "🗄️ Multi-Dataset Lake Explorer",
         "⚡ AST Parameterized SQL Sandbox",
         "📊 Engine Telemetry & Latency Profiler",
-        "🧪 Automated Verification Suite (32 Tests)"
+        "🧪 Automated Verification Suite (32 Tests)",
+        "📈 AI Scientific Evaluation Benchmark"
     ])
 
     with subtab_lake:
@@ -737,3 +764,57 @@ with tab_developer:
                         })
                 if sql_rows:
                     st.dataframe(pd.DataFrame(sql_rows), hide_index=True)
+
+    with subtab_benchmark:
+        st.markdown("##### 📈 200+ Query AI Scientific Evaluation Benchmark")
+        st.caption("Measures empirical Intent Classification Accuracy, Entity Extraction Precision, Safety Refusal Rates, and Latency distributions across a diverse 265-query evaluation dataset.")
+
+        col_b1, col_b2 = st.columns([1, 2])
+        with col_b1:
+            eval_engine = st.selectbox(
+                "Benchmark Target Engine:",
+                ["Deterministic AST (<3ms)", "Bounded LLM (Gemini/OpenAI)"],
+                key="eval_engine_select"
+            )
+            run_btn = st.button("🚀 Run Scientific Benchmark Suite", type="primary", key="btn_run_eval_bench")
+
+        if run_btn:
+            eng_val = "llm" if "Bounded LLM" in eval_engine else "deterministic"
+            key_val = st.session_state.get("ui_llm_key") or os.environ.get("GEMINI_API_KEY")
+            with st.spinner(f"Running scientific evaluation battery across all benchmark queries ({eval_engine})..."):
+                st.session_state.bench_report = run_full_evaluation_benchmark(engine=eng_val, api_key=key_val)
+
+        if "bench_report" in st.session_state and st.session_state.bench_report:
+            rep = st.session_state.bench_report
+
+            # 5 Key KPI Metric Cards
+            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+            kpi1.metric("🎯 Intent Accuracy", f"{rep.intent_accuracy_pct:.1f}%")
+            kpi2.metric("🔍 Entity Precision", f"{rep.entity_precision_pct:.1f}%")
+            kpi3.metric("🛡️ Safety Refusal", f"{rep.safety_refusal_precision_pct:.1f}%")
+            kpi4.metric("⚖️ Ambiguity Intercept", f"{rep.ambiguity_interception_pct:.1f}%")
+            kpi5.metric("⚡ SQL Grounding", f"{rep.sql_execution_success_pct:.1f}%")
+
+            st.divider()
+
+            # Latency Percentiles & Category Breakdown
+            col_l1, col_l2 = st.columns([1, 1])
+            with col_l1:
+                st.markdown("###### ⏱️ End-to-End Latency Percentiles")
+                lat_c1, lat_c2, lat_c3, lat_c4 = st.columns(4)
+                lat_c1.metric("p50 (Median)", f"{rep.p50_latency_ms} ms")
+                lat_c2.metric("p95", f"{rep.p95_latency_ms} ms")
+                lat_c3.metric("p99", f"{rep.p99_latency_ms} ms")
+                lat_c4.metric("Mean Latency", f"{rep.avg_latency_ms} ms")
+
+            with col_l2:
+                st.markdown("###### 📊 Category Pass Rate Distribution")
+                cat_data = []
+                for cat, s in rep.category_summary.items():
+                    pass_rate = (s["passed"] / s["total"]) * 100
+                    cat_data.append({"Category": cat, "Pass Rate (%)": pass_rate, "Passed": s["passed"], "Total": s["total"]})
+                cat_df = pd.DataFrame(cat_data).sort_values(by="Pass Rate (%)", ascending=False)
+                st.dataframe(cat_df, hide_index=True)
+
+            st.markdown("###### 📋 Benchmark Evaluation Event Logs (First 25 Cases)")
+            st.dataframe(pd.DataFrame(rep.detailed_results[:25]), hide_index=True)

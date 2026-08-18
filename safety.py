@@ -26,44 +26,47 @@ DATABASE_KNOWN_FIELDS = {
 
 # Patterns indicating clinical diagnosis or prescription requests
 MEDICAL_DIAGNOSIS_PATTERNS = [
-    r"\b(do i have|could i have|am i having)\s+(cancer|stroke|heart attack|diabetes|infection|tumor|disease)\b",
+    r"\b(do i have|could i have|am i having)\s+(cancer|stroke|heart attack|diabetes|infection|tumor|disease|covid)\b",
     r"\b(what disease|what illness|what condition)\s+(do i have|is this)\b",
     r"\b(diagnose|diagnosis of|diagnose me)\b",
-    r"\b(what medicine|which medicine|what medication|what drug)\s+(should i take|can i take|to take)\b",
-    r"\b(what dosage|what dose|how much dosage|how many pills|how many mg)\b",
-    r"\b(should i take|can i take)\s+[a-zA-Z0-9\s]+\s*(for|to treat)?\b",
-    r"\b(prescribe|prescription for|cure my|remedy for)\b",
+    r"\b(what medicine|which medicine|what medication|what drug)\s+(should i take|can i take|to take|for|recommended)\b",
+    r"\b(what dosage|what dose|how much dosage|how many pills|how many mg|how much mg)\b",
+    r"\b(should i take|can i take)\s+[a-zA-Z0-9\s]+\s*(for|to treat|with)?\b",
+    r"\b(prescribe|prescription for|cure my|remedy for|cure for|home remedies|cure diabetes|cure migraine|cure cancer|treat diabetes)\b",
     r"\b(why does my\s+[a-zA-Z\s]+\s*hurt)\b",
-    r"\b(am i sick|symptoms of [a-zA-Z\s]+ mean)\b"
+    r"\b(am i sick|symptoms of [a-zA-Z\s]+ mean|symptoms mean)\b"
 ]
 
 # Patterns indicating an active life-threatening emergency
 ACUTE_EMERGENCY_PATTERNS = [
-    r"\b(i am having|i'm having|experiencing)\s+(a heart attack|severe chest pain|a stroke|an emergency|severe bleeding|trouble breathing|difficulty breathing)\b",
-    r"\b(help me i am dying|i can't breathe|someone is unconscious|severe allergic reaction|anaphylaxis)\b",
-    r"\b(emergency right now|life threatening|urgent emergency)\b"
+    r"\b(i am having|i'm having|experiencing)\s+(a heart attack|severe chest pain|a stroke|an emergency|severe bleeding|trouble breathing|difficulty breathing|shortness of breath)\b",
+    r"\b(help me i am dying|i can't breathe|cannot breathe|unconscious|not responding|collapsed|severe allergic reaction|anaphylaxis|anaphylactic)\b",
+    r"\b(emergency right now|life threatening|urgent emergency|arterial bleeding|choking|slurred speech stroke|swallowed poison|poison chemical|head trauma bleeding|uncontrollable seizure)\b"
 ]
 
 # Patterns asking for healthcare attributes that do NOT exist in our SQLite schema
 UNKNOWN_HEALTHCARE_ATTRIBUTE_PATTERNS = [
-    (r"\b(speak|speaks|speaking|language|languages|spanish|hindi|french|mandarin|arabic)\b", "Doctor spoken languages"),
+    (r"\b(speak|speaks|speaking|language|languages|spanish|hindi|french|mandarin|arabic|tamil|german)\b", "Doctor spoken languages"),
     (r"\b(how many surgeries|performed \d+ surgeries|surgery count|surgery volume|number of procedures)\b", "Surgery volume / total procedure count"),
     (r"\b(\d+\s*years?(?:\s*of)?\s*experience|years of experience|how many years|experience years|how long.*practiced)\b", "Years of experience / graduation year"),
     (r"\b(good with diabetic|diabetic patients|diabetes specialist|pediatric oncology|cancer subspecialist)\b", "Sub-specialty condition expertise (e.g. Diabetes)"),
     (r"\b(most patients|patient volume|number of patients|how many patients)\b", "Patient volume / total patient count"),
-    (r"\b(board certified|certifications|fellowship|medical school|alumni|education)\b", "Medical school / Board certifications"),
-    (r"\b(reviews|patient ratings text|written reviews|testimonials)\b", "Written patient review text (only satisfaction score is tracked)")
+    (r"\b(board certified|certifications|fellowship|medical school|alumni|education|harvard|aiims)\b", "Medical school / Board certifications"),
+    (r"\b(reviews|patient ratings text|written reviews|testimonials)\b", "Written patient review text (only satisfaction score is tracked)"),
+    (r"\b(marital status|hobbies|robotic surgery|marble flooring|zodiac)\b", "Non-schema attribute (untracked field)")
 ]
 
 # Prompt injection markers
 PROMPT_INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?(previous|your|the)\s+(instructions|rules|filters)",
-    r"disregard\s+(the\s+)?(prompt|system|guidelines)",
+    r"disregard\s+(the\s+)?(prompt|system|guidelines|what you were told)",
     r"show\s+(me\s+)?(all\s+)?(database\s+)?secrets",
     r"bypass\s+(the\s+)?(guardrails|filters|sql)",
     r"give\s+me\s+(the\s+)?raw\s+sql",
-    r"you\s+are\s+now\s+in\s+dan\s+mode",
-    r"jailbreak"
+    r"you\s+are\s+now\s+(in\s+)?dan(\s+mode)?",
+    r"jailbreak",
+    r"sqlite_master",
+    r"system prompt"
 ]
 
 

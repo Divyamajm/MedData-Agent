@@ -427,9 +427,9 @@ def classify_intent_and_extract_entities(prompt: str, active_domain: Optional[Do
 
     # 8. Contradiction Detection
     contradictions = []
-    if "free" in prompt_lower and ("$100" in prompt_lower or "$50" in prompt_lower or "$500" in prompt_lower or "expensive" in prompt_lower):
+    if "free" in prompt_lower and (re.search(r"(\$|₹|rs\.?|inr)?\s*\d+", prompt_lower) or "expensive" in prompt_lower or "charging" in prompt_lower):
         contradictions.append("Query requests both Free ($0) and a positive fee threshold.")
-    if re.search(r"\b(?:within|under|in|<|at)?\s*0\s*(?:mi|miles)\b", prompt_lower):
+    if re.search(r"\b(?:within|under|in|<|at)?\s*0\s*(?:mi|miles|km|kms)\b", prompt_lower):
         contradictions.append("Search radius of 0 miles is impossible.")
     if "available today" in prompt_lower and "next week" in prompt_lower:
         contradictions.append("Query requests immediate same-day availability and next week.")
@@ -448,20 +448,20 @@ def classify_intent_and_extract_entities(prompt: str, active_domain: Optional[Do
     ambiguity_reason = None
     clarification_options = []
     
-    if re.search(r"\b(best|top|recommended|highest rated)\b", prompt_lower):
-        has_distance = bool(re.search(r"\b(near|close|distance|miles)\b", prompt_lower))
-        has_price = bool(re.search(r"\b(cheap|cheapest|free|cost|fee|affordable)\b", prompt_lower))
-        has_success = bool(re.search(r"\b(success|surgery|procedure|cure)\b", prompt_lower))
-        has_satisfaction = bool(re.search(r"\b(patient rating|satisfaction|review)\b", prompt_lower))
+    if re.search(r"\b(best|top|recommended|highest rated|finest|superior|greatest|reputation|#1|ultimate|favorite)\b", prompt_lower):
+        has_distance_filter = bool(re.search(r"\b(within \d+|less than \d+|\d+\s*miles|\d+\s*km)\b", prompt_lower))
+        has_price_filter = bool(re.search(r"\b(under \d+|less than \d+|\d+\s*rupees|\$\d+)\b", prompt_lower))
+        has_success_filter = bool(re.search(r"\b(surgery success|success rate >)\b", prompt_lower))
+        has_satisfaction_filter = bool(re.search(r"\b(rating >|score >|satisfaction >)\b", prompt_lower))
 
-        if not (has_distance or has_price or has_success or has_satisfaction):
+        if not (has_distance_filter or has_price_filter or has_success_filter or has_satisfaction_filter):
             ambiguity_detected = True
-            ambiguity_reason = "The term 'best' is ambiguous in healthcare discovery."
+            ambiguity_reason = "Subjective terms like 'best', 'top', or 'finest' are ambiguous without concrete ranking metrics."
             clarification_options = [
                 "Highest Patient Satisfaction Score (⭐)",
                 "Highest Surgical Success Rate (📈)",
                 "Closest Proximity / Distance (📍)",
-                "Lowest Consultation Fee / Free ($)"
+                "Lowest Consultation Fee / Free (₹/$)"
             ]
 
     # 10. Extract Numerical Constraints for Healthcare
@@ -551,3 +551,39 @@ def classify_intent_and_extract_entities(prompt: str, active_domain: Optional[Do
 
 # Backwards compatibility alias
 parse_intent_and_filters = classify_intent_and_extract_entities
+
+
+def parse_user_intent_hybrid(
+    prompt: str,
+    engine: str = "deterministic",
+    api_key: Optional[str] = None,
+    provider: str = "gemini",
+    model_name: Optional[str] = None
+) -> Tuple[IntentClassificationResult, str, float]:
+    """
+    Dual-Engine Dispatcher:
+    - engine='deterministic': High-speed (<3ms) regex & dictionary AST classification.
+    - engine='llm': Bounded LLM structured JSON intent parsing.
+    - engine='auto': Attempts LLM parsing if API key is present, falls back cleanly to deterministic.
+    
+    Returns: (IntentClassificationResult, engine_used_str, latency_ms)
+    """
+    import time
+    start = time.perf_counter()
+    
+    if engine in ["llm", "auto"]:
+        from llm_parser import parse_intent_with_llm
+        res, latency, err = parse_intent_with_llm(prompt, api_key=api_key, provider=provider, model_name=model_name)
+        if res is not None:
+            return res, f"LLM ({provider.upper()})", latency
+        if engine == "llm" and err:
+            # If strictly requested LLM and failed, return deterministic with note
+            det_res = classify_intent_and_extract_entities(prompt)
+            det_res.explanation = f"[LLM Fallback: {err}] " + (det_res.explanation or "")
+            latency = (time.perf_counter() - start) * 1000
+            return det_res, "Deterministic (LLM Fallback)", latency
+
+    # Default Deterministic Engine
+    det_res = classify_intent_and_extract_entities(prompt)
+    latency = (time.perf_counter() - start) * 1000
+    return det_res, "Deterministic AST (<3ms)", latency

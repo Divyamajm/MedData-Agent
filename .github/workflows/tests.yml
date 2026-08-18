@@ -1,4 +1,4 @@
-name: MedData AI CI Verification
+name: MedData AI CI & Evaluation Verification
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test:
-    name: Run Automated Test Batteries & Security Checks
+    name: Run Automated Test Batteries, Security Checks & Scientific Evals
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +31,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Execute MedData Automated Verification Suite
+      - name: Execute MedData 32-Test Core Verification Battery
         run: |
           python -m tests.test_suite
+
+      - name: Execute MedData 265-Query Scientific Evaluation Benchmark
+        run: |
+          python -m tests.eval_benchmark
