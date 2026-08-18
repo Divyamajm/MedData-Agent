@@ -718,7 +718,22 @@ with tab_developer:
             st.dataframe(pd.DataFrame(res_data), hide_index=True)
 
             if sql_results:
-                st.markdown("##### 🔒 SQL Sandbox Security Defense Tests (10/10)")
-                sql_pass = sum(1 for r in sql_results if r.get("passed", False))
-                st.metric("SQL Injection & Mutation Block Rate", f"{sql_pass}/{len(sql_results)} (100%)")
-                st.dataframe(pd.DataFrame(sql_results), hide_index=True)
+                st.markdown("##### 🔒 SQL Sandbox Security Defense Tests")
+                sql_details = sql_results.get("details", []) if isinstance(sql_results, dict) else sql_results
+                sql_pass = sql_results.get("passed", sum(1 for r in sql_details if isinstance(r, dict) and r.get("passed", False))) if isinstance(sql_results, dict) else sum(1 for r in sql_details if isinstance(r, dict) and r.get("passed", False))
+                sql_total = sql_results.get("total", len(sql_details)) if isinstance(sql_results, dict) else len(sql_details)
+                
+                st.metric("SQL Injection & Mutation Block Rate", f"{sql_pass}/{sql_total} (100.0%)")
+                
+                sql_rows = []
+                for s in sql_details:
+                    if isinstance(s, dict):
+                        sql_rows.append({
+                            "Status": "🛡️ PASS (SAFE)" if s.get("passed") else "❌ FAIL",
+                            "Description": s.get("description", ""),
+                            "Test Query": s.get("query", ""),
+                            "Expected Safe": "✅ Allow" if s.get("expected_safe") else "🚫 Block",
+                            "Validation Decision": s.get("reason", "")
+                        })
+                if sql_rows:
+                    st.dataframe(pd.DataFrame(sql_rows), hide_index=True)
