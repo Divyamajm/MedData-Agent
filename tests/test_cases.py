@@ -280,5 +280,43 @@ ALL_TEST_CASES: List[TestCase] = [
         expected_intent=IntentType.PROMPT_INJECTION,
         expected_safety_refusal=True,
         notes="Must refuse raw SQL bypass."
+    ),
+
+    # Category 12: UrbanLocate Real Estate & Livability Discovery
+    TestCase(
+        id="TC27",
+        category="Housing Discovery",
+        description="Search for 3BHK housing near top schools under budget",
+        input_prompt="Find a 3BHK house under $3000 near top schools",
+        expected_intent=IntentType.HOUSING_SEARCH,
+        expected_min_results=1,
+        notes="Multi-constraint real estate search with price and school constraints."
+    ),
+    TestCase(
+        id="TC28",
+        category="Housing Discovery",
+        description="Search for ultra-safe housing with low crime index",
+        input_prompt="Safest neighborhood with low crime index < 20",
+        expected_intent=IntentType.HOUSING_SEARCH,
+        expected_min_results=1,
+        notes="Crime rate filtering on property database."
+    ),
+    TestCase(
+        id="TC29",
+        category="Housing Discovery",
+        description="Search for housing near hospital proximity",
+        input_prompt="Apartment near hospital within 1.5 miles",
+        expected_intent=IntentType.HOUSING_SEARCH,
+        expected_min_results=1,
+        notes="Hospital proximity distance constraint on housing."
+    ),
+    TestCase(
+        id="TC30",
+        category="Housing Discovery",
+        description="Search for luxury villa in Pacific Heights",
+        input_prompt="Luxury Villa in Pacific Heights",
+        expected_intent=IntentType.HOUSING_SEARCH,
+        expected_min_results=1,
+        notes="Property type and neighborhood search."
     )
 ]

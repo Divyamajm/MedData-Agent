@@ -1,7 +1,7 @@
 """
-MedData AI - Deterministic Query Engine Layer
-Builds safe, parameterized SQL queries from validated SearchFilters, executes them,
-measures execution time, and provides transparent zero-result relaxation options.
+MedData AI & UrbanLocate - Multi-Domain Deterministic Query Engine Layer
+Builds safe, parameterized SQL queries from validated filters, executes them,
+measures latency, and provides transparent zero-result relaxation options.
 """
 
 import time
@@ -9,16 +9,23 @@ import sqlite3
 from typing import Dict, Any, List, Tuple, Optional
 
 from models import (
-    SearchFilters, QueryResult, SortMetric, SortOrder,
-    CanonicalSpecialty, DoctorRecord
+    SearchFilters, HousingSearchFilters, QueryResult, SortMetric, SortOrder,
+    HousingSortMetric, DomainType, CanonicalSpecialty
 )
 from database import get_connection, DB_PATH
 
-# Whitelist of allowed database columns to prevent any possibility of SQL injection
-ALLOWED_COLUMNS = {
+# Whitelist of allowed database columns to prevent SQL injection
+ALLOWED_DOCTOR_COLUMNS = {
     "id", "name", "specialty", "primary_surgery", "surgery_success_rate",
     "satisfaction_score", "distance_miles", "consultation_fee",
-    "is_available_today", "next_available_date"
+    "is_available_today", "next_available_date", "latitude", "longitude"
+}
+
+ALLOWED_HOUSING_COLUMNS = {
+    "id", "title", "neighborhood", "property_type", "price_per_month",
+    "bedrooms", "bathrooms", "sqft", "crime_index_score", "school_rating",
+    "hospital_dist_miles", "transit_dist_miles", "market_dist_miles",
+    "livability_score", "latitude", "longitude"
 }
 
 ALLOWED_SORT_METRICS = {
@@ -29,16 +36,29 @@ ALLOWED_SORT_METRICS = {
     SortMetric.NEXT_AVAILABLE_DATE: "next_available_date"
 }
 
+ALLOWED_HOUSING_SORT_METRICS = {
+    HousingSortMetric.LIVABILITY_SCORE: "livability_score",
+    HousingSortMetric.PRICE: "price_per_month",
+    HousingSortMetric.CRIME_INDEX: "crime_index_score",
+    HousingSortMetric.SCHOOL_RATING: "school_rating",
+    HousingSortMetric.HOSPITAL_DISTANCE: "hospital_dist_miles",
+    HousingSortMetric.TRANSIT_DISTANCE: "transit_dist_miles"
+}
+
+
+# ==========================================
+# 🏥 HEALTHCARE QUERY BUILDER
+# ==========================================
 
 def build_safe_query(filters: SearchFilters) -> Tuple[str, List[Any], Dict[str, Any]]:
     """
-    Constructs a safe, parameterized SQL query string and parameter list.
+    Constructs a safe, parameterized SQL query for Doctors table.
     Guarantees no arbitrary string concatenation of user input.
     """
     select_clause = """
         SELECT id, name, specialty, primary_surgery, surgery_success_rate,
                satisfaction_score, distance_miles, consultation_fee,
-               is_available_today, next_available_date
+               is_available_today, next_available_date, latitude, longitude
         FROM Doctors
     """
     where_clauses = []
@@ -99,190 +119,252 @@ def build_safe_query(filters: SearchFilters) -> Tuple[str, List[Any], Dict[str, 
         order_clause = f" ORDER BY {column_name} {direction}"
         applied_filters["sorted_by"] = f"{column_name} ({direction})"
     else:
-        # Default deterministic ordering by distance ASC, satisfaction DESC
         order_clause = " ORDER BY distance_miles ASC, satisfaction_score DESC"
-        applied_filters["sorted_by"] = "distance_miles (ASC), satisfaction_score (DESC) [Default]"
 
     # 9. LIMIT clause
-    limit_clause = ""
-    if filters.limit is not None and filters.limit > 0:
-        limit_clause = " LIMIT ?"
-        params.append(int(filters.limit))
-        applied_filters["limit"] = filters.limit
+    limit_clause = f" LIMIT {filters.limit}"
 
-    full_sql = (select_clause + full_where + order_clause + limit_clause).strip()
-    return full_sql, params, applied_filters
+    sql_template = select_clause + full_where + order_clause + limit_clause
+    return sql_template.strip(), params, applied_filters
 
 
-def calculate_relaxation_suggestions(
-    original_filters: SearchFilters, 
-    conn: sqlite3.Connection
-) -> List[Dict[str, Any]]:
-    """
-    When a multi-constraint search returns 0 results, this function tests
-    what single constraint relaxations would yield matching doctors.
-    Allows user-controlled relaxation without silent dropping of filters.
-    """
-    suggestions = []
-
-    # 1. Test removing availability restriction
-    if original_filters.available_today:
-        test_filters = original_filters.model_copy()
-        test_filters.available_today = None
-        sql, params, _ = build_safe_query(test_filters)
-        c = conn.cursor()
-        c.execute(sql, params)
-        count = len(c.fetchall())
-        if count > 0:
-            suggestions.append({
-                "label": "📅 Remove Availability Restriction (Show all dates)",
-                "action": "remove_availability",
-                "result_count": count,
-                "modified_filter": "available_today = None"
-            })
-
-    # 2. Test expanding distance
-    if original_filters.max_distance is not None:
-        expanded_dist = round(original_filters.max_distance * 2.5, 1)
-        test_filters = original_filters.model_copy()
-        test_filters.max_distance = expanded_dist
-        sql, params, _ = build_safe_query(test_filters)
-        c = conn.cursor()
-        c.execute(sql, params)
-        count = len(c.fetchall())
-        if count > 0:
-            suggestions.append({
-                "label": f"📍 Expand Search Radius to {expanded_dist} miles",
-                "action": "expand_distance",
-                "new_distance": expanded_dist,
-                "result_count": count,
-                "modified_filter": f"max_distance = {expanded_dist}"
-            })
-
-    # 3. Test increasing max fee
-    if original_filters.max_fee is not None:
-        increased_fee = original_filters.max_fee + 150
-        test_filters = original_filters.model_copy()
-        test_filters.max_fee = increased_fee
-        sql, params, _ = build_safe_query(test_filters)
-        c = conn.cursor()
-        c.execute(sql, params)
-        count = len(c.fetchall())
-        if count > 0:
-            suggestions.append({
-                "label": f"💰 Increase Maximum Fee to ${increased_fee}",
-                "action": "increase_fee",
-                "new_fee": increased_fee,
-                "result_count": count,
-                "modified_filter": f"max_fee = {increased_fee}"
-            })
-
-    # 4. Test lowering min success rate
-    if original_filters.min_success_rate is not None and original_filters.min_success_rate > 90.0:
-        test_filters = original_filters.model_copy()
-        test_filters.min_success_rate = 88.0
-        sql, params, _ = build_safe_query(test_filters)
-        c = conn.cursor()
-        c.execute(sql, params)
-        count = len(c.fetchall())
-        if count > 0:
-            suggestions.append({
-                "label": "📈 Relax Success Rate Requirement to ≥ 88%",
-                "action": "lower_success_rate",
-                "new_rate": 88.0,
-                "result_count": count,
-                "modified_filter": "min_success_rate = 88.0%"
-            })
-
-    return suggestions
-
-
-def execute_doctor_search(
-    filters: SearchFilters, 
-    conn: Optional[sqlite3.Connection] = None,
-    db_path: str = DB_PATH
-) -> QueryResult:
-    """
-    Executes a deterministic doctor search with strict parameterization and metrics.
-    """
-    should_close = False
-    if conn is None:
-        conn = get_connection(db_path)
-        should_close = True
+def execute_doctor_search(filters: SearchFilters, db_path: str = DB_PATH) -> QueryResult:
+    """Executes a safe parameterized doctor query and returns QueryResult."""
+    start_time = time.perf_counter()
+    sql_template, params, applied_filters = build_safe_query(filters)
 
     try:
-        sql, params, applied_filters = build_safe_query(filters)
-        
-        start_time = time.perf_counter()
+        conn = get_connection(db_path)
         c = conn.cursor()
-        c.execute(sql, params)
-        rows = c.fetchall()
-        exec_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
-
-        data = [dict(row) for row in rows]
-        row_count = len(data)
-
-        # Generate clear explanation of filtering logic
-        explanation_parts = []
-        if applied_filters.get("specialty"):
-            explanation_parts.append(f"Specialty = '{applied_filters['specialty']}'")
-        if applied_filters.get("max_distance"):
-            explanation_parts.append(f"Distance ≤ {applied_filters['max_distance']}")
-        if applied_filters.get("max_fee"):
-            explanation_parts.append(f"Fee ≤ {applied_filters['max_fee']}")
-        if applied_filters.get("available_today"):
-            explanation_parts.append("Available Today = 'Yes'")
-        if applied_filters.get("min_satisfaction"):
-            explanation_parts.append(f"Satisfaction ≥ {applied_filters['min_satisfaction']}")
-        if applied_filters.get("min_success_rate"):
-            explanation_parts.append(f"Success Rate ≥ {applied_filters['min_success_rate']}")
-
-        filter_summary = ", ".join(explanation_parts) if explanation_parts else "All doctors (no filters)"
-        sort_summary = applied_filters.get("sorted_by", "default")
-        limit_summary = applied_filters.get("limit", "unlimited")
-
-        explanation = f"Queried Doctors table ({filter_summary}), sorted by {sort_summary}, limit {limit_summary}."
+        c.execute(sql_template, params)
+        rows = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        row_count = len(rows)
 
         relaxation_suggestions = []
         if row_count == 0:
-            relaxation_suggestions = calculate_relaxation_suggestions(filters, conn)
+            relaxation_suggestions = generate_relaxation_suggestions(filters, db_path)
+
+        explanation = f"Found {row_count} verified doctor(s) matching your constraints."
+        if row_count == 0:
+            explanation = "No doctors in the database currently match all specified filters."
 
         return QueryResult(
             success=True,
-            data=data,
+            domain=DomainType.HEALTHCARE,
+            data=rows,
             row_count=row_count,
-            sql_template=sql,
+            sql_template=sql_template,
             params=params,
-            execution_time_ms=exec_time_ms,
+            execution_time_ms=execution_time_ms,
             applied_filters=applied_filters,
             explanation=explanation,
             relaxation_suggestions=relaxation_suggestions
         )
-
     except Exception as e:
+        execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
         return QueryResult(
             success=False,
-            error_message=f"Database execution error: {str(e)}",
+            domain=DomainType.HEALTHCARE,
             data=[],
             row_count=0,
-            execution_time_ms=0.0
+            sql_template=sql_template,
+            params=params,
+            execution_time_ms=execution_time_ms,
+            applied_filters=applied_filters,
+            explanation="Failed to execute database query safely.",
+            error_message=str(e)
         )
-    finally:
-        if should_close:
-            conn.close()
 
 
-def get_doctor_details_by_id(doctor_id: int, db_path: str = DB_PATH) -> Optional[Dict[str, Any]]:
-    """Retrieves full verified database record for a single doctor by ID."""
-    conn = get_connection(db_path)
-    c = conn.cursor()
-    c.execute("""
-        SELECT id, name, specialty, primary_surgery, surgery_success_rate,
-               satisfaction_score, distance_miles, consultation_fee,
-               is_available_today, next_available_date
-        FROM Doctors
-        WHERE id = ?
-    """, (doctor_id,))
-    row = c.fetchone()
-    conn.close()
-    return dict(row) if row else None
+# ==========================================
+# 🏡 REAL ESTATE & HOUSING QUERY BUILDER
+# ==========================================
+
+def build_safe_housing_query(filters: HousingSearchFilters) -> Tuple[str, List[Any], Dict[str, Any]]:
+    """Constructs safe parameterized SQL for the Properties table."""
+    select_clause = """
+        SELECT id, title, neighborhood, property_type, price_per_month,
+               bedrooms, bathrooms, sqft, crime_index_score, school_rating,
+               hospital_dist_miles, transit_dist_miles, market_dist_miles,
+               livability_score, latitude, longitude
+        FROM Properties
+    """
+    where_clauses = []
+    params: List[Any] = []
+    applied_filters: Dict[str, Any] = {}
+
+    if filters.neighborhood:
+        where_clauses.append("neighborhood = ?")
+        params.append(filters.neighborhood)
+        applied_filters["neighborhood"] = filters.neighborhood
+
+    if filters.property_type:
+        where_clauses.append("property_type = ?")
+        params.append(filters.property_type.value)
+        applied_filters["property_type"] = filters.property_type.value
+
+    if filters.max_price is not None:
+        where_clauses.append("price_per_month <= ?")
+        params.append(int(filters.max_price))
+        applied_filters["max_price"] = f"${filters.max_price}/mo"
+
+    if filters.max_crime_index is not None:
+        where_clauses.append("crime_index_score <= ?")
+        params.append(int(filters.max_crime_index))
+        applied_filters["max_crime_index"] = f"<= {filters.max_crime_index} (Safe)"
+
+    if filters.min_school_rating is not None:
+        where_clauses.append("school_rating >= ?")
+        params.append(float(filters.min_school_rating))
+        applied_filters["min_school_rating"] = f">= {filters.min_school_rating}/10"
+
+    if filters.max_hospital_distance is not None:
+        where_clauses.append("hospital_dist_miles <= ?")
+        params.append(float(filters.max_hospital_distance))
+        applied_filters["max_hospital_distance"] = f"<= {filters.max_hospital_distance} mi"
+
+    if filters.max_transit_distance is not None:
+        where_clauses.append("transit_dist_miles <= ?")
+        params.append(float(filters.max_transit_distance))
+        applied_filters["max_transit_distance"] = f"<= {filters.max_transit_distance} mi"
+
+    if filters.min_bedrooms is not None:
+        where_clauses.append("bedrooms >= ?")
+        params.append(int(filters.min_bedrooms))
+        applied_filters["min_bedrooms"] = f"{filters.min_bedrooms}+ BHK"
+
+    if filters.min_livability_score is not None:
+        where_clauses.append("livability_score >= ?")
+        params.append(int(filters.min_livability_score))
+        applied_filters["min_livability_score"] = f"{filters.min_livability_score}/100"
+
+    full_where = ""
+    if where_clauses:
+        full_where = " WHERE " + " AND ".join(where_clauses)
+
+    order_clause = " ORDER BY livability_score DESC, price_per_month ASC"
+    if filters.sort_by and filters.sort_by in ALLOWED_HOUSING_SORT_METRICS:
+        column_name = ALLOWED_HOUSING_SORT_METRICS[filters.sort_by]
+        direction = "DESC" if filters.sort_order == SortOrder.DESC else "ASC"
+        order_clause = f" ORDER BY {column_name} {direction}"
+        applied_filters["sorted_by"] = f"{column_name} ({direction})"
+
+    limit_clause = f" LIMIT {filters.limit}"
+
+    sql_template = select_clause + full_where + order_clause + limit_clause
+    return sql_template.strip(), params, applied_filters
+
+
+def execute_housing_search(filters: HousingSearchFilters, db_path: str = DB_PATH) -> QueryResult:
+    """Executes a safe parameterized housing search."""
+    start_time = time.perf_counter()
+    sql_template, params, applied_filters = build_safe_housing_query(filters)
+
+    try:
+        conn = get_connection(db_path)
+        c = conn.cursor()
+        c.execute(sql_template, params)
+        rows = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        row_count = len(rows)
+
+        relaxation_suggestions = []
+        if row_count == 0:
+            relaxation_suggestions = [
+                {"description": "Increase budget threshold by $500", "relaxed_filter": "max_price"},
+                {"description": "Expand hospital search radius by +2.0 miles", "relaxed_filter": "max_hospital_distance"},
+                {"description": "Permit moderate crime index up to 40", "relaxed_filter": "max_crime_index"}
+            ]
+
+        explanation = f"Found {row_count} verified property record(s) matching your livability criteria."
+        if row_count == 0:
+            explanation = "No properties in the database currently match all specified housing filters."
+
+        return QueryResult(
+            success=True,
+            domain=DomainType.REAL_ESTATE,
+            data=rows,
+            row_count=row_count,
+            sql_template=sql_template,
+            params=params,
+            execution_time_ms=execution_time_ms,
+            applied_filters=applied_filters,
+            explanation=explanation,
+            relaxation_suggestions=relaxation_suggestions
+        )
+    except Exception as e:
+        execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return QueryResult(
+            success=False,
+            domain=DomainType.REAL_ESTATE,
+            data=[],
+            row_count=0,
+            sql_template=sql_template,
+            params=params,
+            execution_time_ms=execution_time_ms,
+            applied_filters=applied_filters,
+            explanation="Failed to execute housing database query safely.",
+            error_message=str(e)
+        )
+
+
+def generate_relaxation_suggestions(filters: SearchFilters, db_path: str = DB_PATH) -> List[Dict[str, Any]]:
+    """Calculates specific relaxed filters that will produce non-zero doctor results."""
+    suggestions = []
+    
+    # 1. Relax distance
+    if filters.max_distance is not None:
+        relaxed_distance = filters.max_distance + 10.0
+        relaxed_filters = filters.model_copy(update={"max_distance": relaxed_distance})
+        sql, params, _ = build_safe_query(relaxed_filters)
+        conn = get_connection(db_path)
+        c = conn.cursor()
+        c.execute(sql, params)
+        cnt = len(c.fetchall())
+        conn.close()
+        if cnt > 0:
+            suggestions.append({
+                "description": f"Expand search radius to {relaxed_distance} miles (Yields {cnt} doctors)",
+                "relaxed_filter": "max_distance",
+                "new_value": relaxed_distance
+            })
+
+    # 2. Relax fee
+    if filters.max_fee is not None:
+        relaxed_fee = filters.max_fee + 100
+        relaxed_filters = filters.model_copy(update={"max_fee": relaxed_fee})
+        sql, params, _ = build_safe_query(relaxed_filters)
+        conn = get_connection(db_path)
+        c = conn.cursor()
+        c.execute(sql, params)
+        cnt = len(c.fetchall())
+        conn.close()
+        if cnt > 0:
+            suggestions.append({
+                "description": f"Increase max fee to ${relaxed_fee} (Yields {cnt} doctors)",
+                "relaxed_filter": "max_fee",
+                "new_value": relaxed_fee
+            })
+
+    # 3. Relax same-day availability
+    if filters.available_today:
+        relaxed_filters = filters.model_copy(update={"available_today": None})
+        sql, params, _ = build_safe_query(relaxed_filters)
+        conn = get_connection(db_path)
+        c = conn.cursor()
+        c.execute(sql, params)
+        cnt = len(c.fetchall())
+        conn.close()
+        if cnt > 0:
+            suggestions.append({
+                "description": f"Include doctors available later this week (Yields {cnt} doctors)",
+                "relaxed_filter": "available_today",
+                "new_value": None
+            })
+
+    return suggestions

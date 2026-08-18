@@ -1,15 +1,16 @@
 """
-MedData AI - Intent Classification & Entity Extraction Layer
+MedData AI & UrbanLocate - Multi-Domain Intent Classification & Entity Extraction Layer
 Provides deterministic NLP parsing, synonym normalization, negation handling,
-multi-constraint extraction, ambiguity interception, and contradiction checking.
+multi-constraint extraction, ambiguity interception, and multi-domain routing.
 """
 
 import re
 from typing import Dict, Any, List, Optional, Tuple
 
 from models import (
-    CanonicalSpecialty, SortMetric, SortOrder, IntentType,
-    SearchFilters, IntentClassificationResult
+    CanonicalSpecialty, SortMetric, SortOrder, IntentType, DomainType,
+    SearchFilters, HousingSearchFilters, HousingSortMetric, PropertyType,
+    IntentClassificationResult
 )
 from safety import (
     check_medical_advice_refusal, check_acute_emergency,
@@ -106,6 +107,29 @@ NEGATION_TRIGGERS = [
     r"\b(don't need|do not need|don't want|do not want|not looking for|no need for|no|not|without|exclude|except|other than)\s+([a-zA-Z0-9\s]+)"
 ]
 
+HOUSING_DOMAIN_KEYWORDS = [
+    r"\b(house|houses|home|homes|apartment|apartments|flat|flats|condo|condos|villa|villas|townhouse|townhome)\b",
+    r"\b(rent|rental|bhk|bedrooms?|bathrooms?|sqft|neighborhood|crime|crime rate|school rating|schools?)\b",
+    r"\b(livability|housing|property|properties|transit distance|safe neighborhood|best area)\b"
+]
+
+KNOWN_NEIGHBORHOODS = {
+    "pacific heights": "Pacific Heights",
+    "sunset district": "Sunset District",
+    "sunset": "Sunset District",
+    "mission valley": "Mission Valley",
+    "mission": "Mission Valley",
+    "silicon hills": "Silicon Hills",
+    "silicon": "Silicon Hills",
+    "downtown metro": "Downtown Metro",
+    "downtown": "Downtown Metro",
+    "marina bay": "Marina Bay",
+    "marina": "Marina Bay",
+    "green valley": "Green Valley",
+    "beacon hill": "Beacon Hill",
+    "highland park": "Highland Park"
+}
+
 
 def extract_negations(prompt: str) -> List[str]:
     """Identifies terms that the user explicitly negated."""
@@ -119,338 +143,296 @@ def extract_negations(prompt: str) -> List[str]:
     return negated
 
 
-def extract_specialty(prompt: str, negated_phrases: List[str]) -> Tuple[Optional[CanonicalSpecialty], Optional[str], bool]:
-    """
-    Extracts canonical medical specialty from prompt.
-    Returns: (canonical_specialty, matched_synonym, is_negated)
-    """
-    prompt_lower = prompt.lower()
+def detect_domain(prompt: str, active_domain: Optional[DomainType] = None) -> DomainType:
+    """Detects whether prompt is for Real Estate / Housing or Healthcare."""
+    if active_domain == DomainType.REAL_ESTATE:
+        return DomainType.REAL_ESTATE
     
-    # Sort synonyms by length descending to match multi-word phrases first
-    sorted_synonyms = sorted(SPECIALTY_SYNONYMS.items(), key=lambda x: len(x[0]), reverse=True)
-    
-    for phrase, canonical in sorted_synonyms:
-        pattern = r"\b" + re.escape(phrase) + r"\b"
-        if re.search(pattern, prompt_lower):
-            # Check if this occurrence was negated
-            is_negated = False
-            for neg in negated_phrases:
-                if phrase in neg:
-                    is_negated = True
-                    break
-            
-            if is_negated:
-                return canonical, phrase, True
-            else:
-                return canonical, phrase, False
-                
-    return None, None, False
-
-
-def extract_numeric_constraints(prompt: str) -> Dict[str, Any]:
-    """Extracts max distance, max fee, min satisfaction, min success rate, and row limit."""
     prompt_lower = prompt.lower()
-    constraints = {}
+    for kw in HOUSING_DOMAIN_KEYWORDS:
+        if re.search(kw, prompt_lower):
+            # If prompt mentions doctor/medical specifically, prioritize healthcare
+            if not any(med in prompt_lower for med in ["cardiologist", "neurologist", "pediatrician", "orthopedic", "surgery", "doctor name"]):
+                return DomainType.REAL_ESTATE
 
-    # Distance patterns: "within 5 miles", "under 10 miles", "max 15 mi", "< 5 miles", "5 miles"
-    dist_match = re.search(r"(?:within|under|less than|max|maximum|up to|<|<=)?\s*(\d+(?:\.\d+)?)\s*(?:miles|mile|mi)\b", prompt_lower)
-    if dist_match:
-        val = float(dist_match.group(1))
-        constraints["max_distance"] = val
-
-    # Fee / Price patterns: "$100", "under $150", "max 200 dollars", "<= $50", "fee under 100"
-    fee_match = re.search(r"(?:fee|cost|price|under|less than|max|maximum|up to|<|<=)?\s*\$\s*(\d+)\b", prompt_lower)
-    if not fee_match:
-        fee_match = re.search(r"(?:under|less than|max|maximum|up to|<|<=)\s*(\d+)\s*(?:dollars|usd|bucks)\b", prompt_lower)
-    if fee_match:
-        constraints["max_fee"] = int(fee_match.group(1))
-
-    # Free care explicit check
-    if re.search(r"\b(free|no cost|\$0)\b", prompt_lower):
-        constraints["max_fee"] = 0
-
-    # Success rate patterns: "success rate over 95%", "> 90% success", "95% success rate"
-    succ_match = re.search(r"(?:success|success rate|surgical rate)\s*(?:over|above|greater than|>|>=|at least)?\s*(\d+(?:\.\d+)?)\s*%", prompt_lower)
-    if not succ_match:
-        succ_match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*(?:success|success rate)", prompt_lower)
-    if succ_match:
-        constraints["min_success_rate"] = float(succ_match.group(1))
-
-    # Satisfaction score patterns: "satisfaction score over 90", "satisfaction > 85", "score at least 90"
-    sat_match = re.search(r"(?:satisfaction|satisfaction score|rating)\s*(?:over|above|greater than|>|>=|at least)\s*(\d+)\b", prompt_lower)
-    if sat_match:
-        constraints["min_satisfaction"] = int(sat_match.group(1))
-
-    # Result limit / count patterns: "top 3", "first 10", "show 5"
-    limit_match = re.search(r"\b(?:top|first|show|limit|give me)\s*(\d+)\b", prompt_lower)
-    if limit_match:
-        constraints["limit"] = int(limit_match.group(1))
-
-    # Availability pattern
-    if re.search(r"\b(available today|today only|open today|see someone today|available now)\b", prompt_lower):
-        constraints["available_today"] = True
-
-    return constraints
+    return DomainType.HEALTHCARE
 
 
-def parse_intent_and_filters(prompt: str) -> IntentClassificationResult:
+def parse_housing_constraints(prompt: str) -> HousingSearchFilters:
+    """Extracts structured real estate constraints from natural language."""
+    prompt_lower = prompt.lower()
+    filters = HousingSearchFilters()
+
+    # 1. Price extraction ($ or numbers)
+    price_match = re.search(r"(?:under|less than|max|budget|below|up to|\$)\s*\$?(\d{3,5})", prompt_lower)
+    if price_match:
+        filters.max_price = int(price_match.group(1))
+
+    # 2. Crime index extraction
+    if re.search(r"\b(very safe|ultra safe|safest|lowest crime|minimal crime)\b", prompt_lower):
+        filters.max_crime_index = 15
+    elif re.search(r"\b(safe|low crime|less crime|safe area|low violence)\b", prompt_lower):
+        filters.max_crime_index = 25
+    elif re.search(r"(?:crime|crime index|crime score)\s*(?:<|under|less than|below|<=)\s*(\d{1,3})", prompt_lower):
+        m = re.search(r"(?:crime|crime index|crime score)\s*(?:<|under|less than|below|<=)\s*(\d{1,3})", prompt_lower)
+        filters.max_crime_index = int(m.group(1))
+
+    # 3. School rating extraction
+    if re.search(r"\b(top school|top schools|best school|best schools|elite schools|9\+ school)\b", prompt_lower):
+        filters.min_school_rating = 9.0
+    elif re.search(r"\b(good school|good schools|high rated schools?|great school)\b", prompt_lower):
+        filters.min_school_rating = 8.0
+    elif re.search(r"(?:school|schools|school rating)\s*(?:>|above|at least|min|>=)\s*(\d+(?:\.\d+)?)", prompt_lower):
+        m = re.search(r"(?:school|schools|school rating)\s*(?:>|above|at least|min|>=)\s*(\d+(?:\.\d+)?)", prompt_lower)
+        filters.min_school_rating = float(m.group(1))
+
+    # 4. Hospital distance extraction
+    hosp_match = re.search(r"(?:hospital|medical center|clinic)\s*(?:within|under|less than|<|below)\s*(\d+(?:\.\d+)?)\s*(?:mi|miles)?", prompt_lower)
+    if hosp_match:
+        filters.max_hospital_distance = float(hosp_match.group(1))
+    elif re.search(r"\b(near hospital|close to hospital|hospital adjacent|nearby hospital)\b", prompt_lower):
+        filters.max_hospital_distance = 1.5
+
+    # 5. Transit distance extraction
+    if re.search(r"\b(near transit|near metro|near subway|walkable|transit accessible)\b", prompt_lower):
+        filters.max_transit_distance = 0.5
+
+    # 6. Bedrooms (BHK / Bed)
+    bhk_match = re.search(r"(\d+)\s*(?:bhk|bed|bedrooms?|br)\b", prompt_lower)
+    if bhk_match:
+        filters.min_bedrooms = int(bhk_match.group(1))
+
+    # 7. Property Type
+    if "villa" in prompt_lower:
+        filters.property_type = PropertyType.VILLA
+    elif "condo" in prompt_lower:
+        filters.property_type = PropertyType.CONDO
+    elif "townhouse" in prompt_lower or "townhome" in prompt_lower:
+        filters.property_type = PropertyType.TOWNHOUSE
+    elif "apartment" in prompt_lower or "flat" in prompt_lower:
+        filters.property_type = PropertyType.APARTMENT
+    elif "single family" in prompt_lower:
+        filters.property_type = PropertyType.SINGLE_FAMILY
+
+    # 8. Neighborhood
+    for key, nbh_name in KNOWN_NEIGHBORHOODS.items():
+        if key in prompt_lower:
+            filters.neighborhood = nbh_name
+            break
+
+    # 9. Sorting
+    if any(s in prompt_lower for s in ["cheapest", "lowest price", "affordable", "budget"]):
+        filters.sort_by = HousingSortMetric.PRICE
+        filters.sort_order = SortOrder.ASC
+    elif any(s in prompt_lower for s in ["safest", "lowest crime", "least crime"]):
+        filters.sort_by = HousingSortMetric.CRIME_INDEX
+        filters.sort_order = SortOrder.ASC
+    elif any(s in prompt_lower for s in ["best schools", "top schools", "highest rated schools"]):
+        filters.sort_by = HousingSortMetric.SCHOOL_RATING
+        filters.sort_order = SortOrder.DESC
+    elif any(s in prompt_lower for s in ["closest to hospital", "nearest hospital"]):
+        filters.sort_by = HousingSortMetric.HOSPITAL_DISTANCE
+        filters.sort_order = SortOrder.ASC
+    else:
+        filters.sort_by = HousingSortMetric.LIVABILITY_SCORE
+        filters.sort_order = SortOrder.DESC
+
+    return filters
+
+
+def classify_intent_and_extract_entities(prompt: str, active_domain: Optional[DomainType] = None) -> IntentClassificationResult:
     """
-    Main deterministic NLP pipeline for classifying intent, extracting entities,
-    intercepting ambiguities, and detecting contradictions.
+    Master multi-domain parser executing deterministic intent classification,
+    safety guardrails, constraint extraction, and ambiguity handling.
     """
-    raw_prompt = prompt.strip()
-    prompt_lower = raw_prompt.lower()
+    domain = detect_domain(prompt, active_domain)
 
-    # 1. Prompt Injection Defense
-    injection = check_prompt_injection(raw_prompt)
-    if injection:
+    # 1. Check prompt injection
+    injection_check = check_prompt_injection(prompt)
+    if injection_check:
         return IntentClassificationResult(
+            domain=domain,
             intent=IntentType.PROMPT_INJECTION,
-            confidence=1.0,
-            safety_flags=["prompt_injection"],
-            explanation=injection["message"],
-            raw_prompt=raw_prompt
+            safety_flags=["prompt_injection_blocked"],
+            explanation=injection_check["message"],
+            raw_prompt=prompt
         )
 
-    # 2. Medical Advice & Diagnosis Guardrail
-    med_refusal = check_medical_advice_refusal(raw_prompt)
-    if med_refusal:
+    # 2. If Real Estate domain, route to Housing Parser
+    if domain == DomainType.REAL_ESTATE:
+        housing_filters = parse_housing_constraints(prompt)
         return IntentClassificationResult(
+            domain=DomainType.REAL_ESTATE,
+            intent=IntentType.HOUSING_SEARCH,
+            confidence=0.95,
+            housing_filters=housing_filters,
+            explanation="Deterministic Real Estate & Livability constraint extraction.",
+            raw_prompt=prompt
+        )
+
+    # 3. Medical Safety & Clinical Advice Refusal Check
+    advice_check = check_medical_advice_refusal(prompt)
+    if advice_check:
+        return IntentClassificationResult(
+            domain=DomainType.HEALTHCARE,
             intent=IntentType.MEDICAL_ADVICE,
-            confidence=1.0,
             safety_flags=["medical_advice_refusal"],
-            explanation=med_refusal["message"],
-            raw_prompt=raw_prompt
+            explanation=advice_check["message"],
+            raw_prompt=prompt
         )
 
-    # 3. Acute Life-Threatening Emergency Guardrail
-    acute_emerg = check_acute_emergency(raw_prompt)
-    if acute_emerg:
+    # 4. Acute Life-Threatening Emergency Interception
+    emergency_check = check_acute_emergency(prompt)
+    if emergency_check:
         return IntentClassificationResult(
+            domain=DomainType.HEALTHCARE,
             intent=IntentType.EMERGENCY,
-            confidence=1.0,
-            safety_flags=["acute_emergency"],
-            explanation=acute_emerg["message"],
-            raw_prompt=raw_prompt
+            safety_flags=["acute_emergency_detected"],
+            explanation=emergency_check["message"],
+            raw_prompt=prompt
         )
 
-    # 4. Unknown Database Fields Guardrail (Refusal to Guess)
-    unknown_attr = check_unknown_attributes(raw_prompt)
-    if unknown_attr:
+    # 5. Unknown Field Factuality Check
+    unknown_check = check_unknown_attributes(prompt)
+    if unknown_check:
         return IntentClassificationResult(
+            domain=DomainType.HEALTHCARE,
             intent=IntentType.UNKNOWN_ATTRIBUTE,
-            confidence=1.0,
-            unknown_fields_requested=unknown_attr["missing_fields"],
-            explanation=unknown_attr["message"],
-            raw_prompt=raw_prompt
+            unknown_fields_requested=unknown_check["missing_fields"],
+            explanation=unknown_check["message"],
+            raw_prompt=prompt
         )
 
-    # 5. Greeting / Intro
-    if re.match(r"^(hi|hello|hey|greetings|good morning|good afternoon|good evening|howdy)\b", prompt_lower) and len(prompt_lower.split()) <= 4:
-        return IntentClassificationResult(
-            intent=IntentType.GREETING,
-            confidence=1.0,
-            explanation=(
-                "Hello! I am the **MedData AI Triage & Discovery Agent**.\n\n"
-                "I can help you search our verified demo physician directory by:\n"
-                "• **Specialty** (Cardiology, Neurology, Orthopedics, Pediatrics, Emergency)\n"
-                "• **Cost & Affordability** (e.g., *'Find free or cheap doctors'*)\n"
-                "• **Distance & Location** (e.g., *'Nearest cardiologist within 5 miles'*)\n"
-                "• **Clinical Success Rate & Satisfaction** (e.g., *'Top doctors by surgical success rate'*)\n"
-                "• **Availability** (e.g., *'Who is available today?'*)\n\n"
-                "How may I assist you today?"
-            ),
-            raw_prompt=raw_prompt
-        )
+    # 6. Extract Negations
+    negated_terms = extract_negations(prompt)
 
-    # 6. Entity & Negation Extraction
-    negated_phrases = extract_negations(raw_prompt)
-    specialty, matched_synonym, is_negated = extract_specialty(raw_prompt, negated_phrases)
-    numeric_constraints = extract_numeric_constraints(raw_prompt)
+    # 7. Healthcare Specialty Matching
+    prompt_lower = prompt.lower()
+    matched_specialty: Optional[CanonicalSpecialty] = None
+    for term, canonical in SPECIALTY_SYNONYMS.items():
+        if re.search(r"\b" + re.escape(term) + r"\b", prompt_lower):
+            if term not in " ".join(negated_terms):
+                matched_specialty = canonical
+                break
 
-    normalized_entities = {}
-    negated_entities = []
-
-    if specialty:
-        if is_negated:
-            negated_entities.append(f"Specialty: {specialty.value} (from '{matched_synonym}')")
-        else:
-            normalized_entities["specialty"] = specialty.value
-            if matched_synonym != specialty.value.lower():
-                normalized_entities["synonym_interpretation"] = f"Interpreted '{matched_synonym}' as {specialty.value}"
-
-    # 7. Contradiction Detection
+    # 8. Contradiction Detection
     contradictions = []
-    
-    # Contradiction: Free ($0) vs $500 fee
-    has_free = bool(re.search(r"\b(free|\$0|zero dollars)\b", prompt_lower))
-    has_high_fee = bool(re.search(r"\$\s*([1-9]\d{2,})", prompt_lower))
-    if has_free and has_high_fee:
-        high_fee_val = re.search(r"\$\s*([1-9]\d{2,})", prompt_lower).group(1)
-        contradictions.append(
-            f"Contradictory fee criteria: You requested a 'free' ($0) consultation, but also specified a ${high_fee_val} fee limit."
-        )
-
-    # Contradiction: Distance <= 0
-    if numeric_constraints.get("max_distance") is not None and numeric_constraints["max_distance"] <= 0:
-        contradictions.append("Contradictory distance: Search radius cannot be 0 or negative miles.")
+    if "free" in prompt_lower and ("$100" in prompt_lower or "$50" in prompt_lower or "$500" in prompt_lower or "expensive" in prompt_lower):
+        contradictions.append("Query requests both Free ($0) and a positive fee threshold.")
+    if re.search(r"\b(?:within|under|in|<|at)?\s*0\s*(?:mi|miles)\b", prompt_lower):
+        contradictions.append("Search radius of 0 miles is impossible.")
+    if "available today" in prompt_lower and "next week" in prompt_lower:
+        contradictions.append("Query requests immediate same-day availability and next week.")
 
     if contradictions:
         return IntentClassificationResult(
+            domain=DomainType.HEALTHCARE,
             intent=IntentType.CONTRADICTION,
-            confidence=1.0,
             contradictions_detected=contradictions,
-            explanation=(
-                "⚠️ **Contradictory Request Detected**:\n\n" +
-                "\n".join([f"• {c}" for c in contradictions]) +
-                "\n\nPlease clarify your search criteria so I can provide accurate database results."
-            ),
-            raw_prompt=raw_prompt
+            explanation=f"⚠️ Contradictory filters detected: {'; '.join(contradictions)}",
+            raw_prompt=prompt
         )
 
-    # 8. Check for Specific Doctor Name Inquiry
-    doc_name_match = re.search(r"\b(dr\.?\s+[a-z]+(?:\s+[a-z]+)?)\b", prompt_lower)
-    if doc_name_match and "find" not in prompt_lower and "search" not in prompt_lower:
-        doc_name_str = doc_name_match.group(1).title()
-        # Verify it's not just "Dr."
-        if len(doc_name_str.split()) >= 2:
-            return IntentClassificationResult(
-                intent=IntentType.DOCTOR_DETAILS,
-                confidence=0.95,
-                filters=SearchFilters(doctor_name=doc_name_str),
-                normalized_entities={"doctor_name": doc_name_str},
-                explanation=f"Fetching verified database record for {doc_name_str}.",
-                raw_prompt=raw_prompt
-            )
-
-    # 9. Ranking Ambiguity Detection ("Best", "Top", "Greatest", "Preferred")
-    has_ranking_keyword = bool(re.search(r"\b(best|top|greatest|highest rated|number one|most recommended|finest)\b", prompt_lower))
+    # 9. Ambiguity Interception (Ranking vs Distance vs Cost)
+    ambiguity_detected = False
+    ambiguity_reason = None
+    clarification_options = []
     
-    # Check if a specific optimization metric was already explicitly mentioned
-    has_explicit_satisfaction = bool(re.search(r"\b(satisfaction|patient score|rating|reviews? score)\b", prompt_lower))
-    has_explicit_success = bool(re.search(r"\b(success rate|surgical success|surgery rate|outcomes?)\b", prompt_lower))
-    has_explicit_distance = bool(re.search(r"\b(nearest|closest|shortest distance|proximity|near me)\b", prompt_lower))
-    has_explicit_price = bool(re.search(r"\b(cheapest|lowest fee|cost|affordable|price|free|\$0)\b", prompt_lower))
-    has_explicit_availability = bool(re.search(r"\b(earliest|soonest|available today|availability|available now)\b", prompt_lower))
+    if re.search(r"\b(best|top|recommended|highest rated)\b", prompt_lower):
+        has_distance = bool(re.search(r"\b(near|close|distance|miles)\b", prompt_lower))
+        has_price = bool(re.search(r"\b(cheap|cheapest|free|cost|fee|affordable)\b", prompt_lower))
+        has_success = bool(re.search(r"\b(success|surgery|procedure|cure)\b", prompt_lower))
+        has_satisfaction = bool(re.search(r"\b(patient rating|satisfaction|review)\b", prompt_lower))
 
-    # Ambiguity check: if user asked for 'best' or 'top' without defining specific metric
-    if has_ranking_keyword and not (has_explicit_satisfaction or has_explicit_success or has_explicit_distance or has_explicit_price or has_explicit_availability):
-        spec_text = f" in **{specialty.value}**" if specialty and not is_negated else ""
-        return IntentClassificationResult(
-            intent=IntentType.AMBIGUOUS,
-            confidence=0.95,
-            filters=SearchFilters(specialty=specialty if not is_negated else None),
-            normalized_entities=normalized_entities,
-            negated_entities=negated_entities,
-            ambiguity_detected=True,
-            ambiguity_reason="Ambiguous 'best' ranking requested without defining the optimization metric.",
-            clarification_options=[
-                "⭐ Highest Patient Satisfaction",
-                "📈 Highest Surgical Success Rate",
-                "📍 Closest Distance",
-                "💰 Lowest Consultation Fee",
-                "📅 Earliest Availability"
-            ],
-            explanation=(
-                f"⚠️ **Ambiguity Detected**: You asked for the 'best' doctor{spec_text}.\n\n"
-                "Healthcare quality has multiple objective dimensions in our database. "
-                "**What would you like to optimize for?**"
-            ),
-            raw_prompt=raw_prompt
-        )
+        if not (has_distance or has_price or has_success or has_satisfaction):
+            ambiguity_detected = True
+            ambiguity_reason = "The term 'best' is ambiguous in healthcare discovery."
+            clarification_options = [
+                "Highest Patient Satisfaction Score (⭐)",
+                "Highest Surgical Success Rate (📈)",
+                "Closest Proximity / Distance (📍)",
+                "Lowest Consultation Fee / Free ($)"
+            ]
 
-    # 10. General Ambiguous Inquiry ("Find me a doctor", "I need a doctor")
-    if re.match(r"^(find\s+(?:me\s+)?a\s+doctor|i\s+need\s+a\s+doctor|show\s+doctors|get\s+doctor)$", prompt_lower):
-        return IntentClassificationResult(
-            intent=IntentType.AMBIGUOUS,
-            confidence=0.9,
-            ambiguity_detected=True,
-            ambiguity_reason="No specialty or criteria specified.",
-            clarification_options=[
-                "🫀 Cardiology",
-                "🧠 Neurology",
-                "🦴 Orthopedics",
-                "👶 Pediatrics",
-                "🚨 Emergency"
-            ],
-            explanation="⚠️ **Specialty Required**: What medical specialty are you looking for?",
-            raw_prompt=raw_prompt
-        )
-
-    # 11. Build SearchFilters & Intent
+    # 10. Extract Numerical Constraints for Healthcare
     filters = SearchFilters()
+    if matched_specialty:
+        filters.specialty = matched_specialty
 
-    if specialty and not is_negated:
-        filters.specialty = specialty
+    # Max fee
+    if "free" in prompt_lower:
+        filters.max_fee = 0
+    else:
+        fee_match = re.search(r"(?:under|less than|fee|cost|below|\$)\s*\$?(\d{2,4})", prompt_lower)
+        if fee_match:
+            filters.max_fee = int(fee_match.group(1))
 
-    if "max_distance" in numeric_constraints:
-        filters.max_distance = numeric_constraints["max_distance"]
-    if "max_fee" in numeric_constraints:
-        filters.max_fee = numeric_constraints["max_fee"]
-    if "min_success_rate" in numeric_constraints:
-        filters.min_success_rate = numeric_constraints["min_success_rate"]
-    if "min_satisfaction" in numeric_constraints:
-        filters.min_satisfaction = numeric_constraints["min_satisfaction"]
-    if "available_today" in numeric_constraints:
-        filters.available_today = numeric_constraints["available_today"]
-    if "limit" in numeric_constraints:
-        filters.limit = numeric_constraints["limit"]
+    # Max distance
+    dist_match = re.search(r"(?:within|under|less than|<)\s*(\d+(?:\.\d+)?)\s*(?:mi|miles)", prompt_lower)
+    if dist_match:
+        filters.max_distance = float(dist_match.group(1))
 
-    # Sorting & Intent Classification
-    intent = IntentType.DOCTOR_SEARCH
+    # Availability today
+    if any(k in prompt_lower for k in ["available today", "today", "now", "same day", "open today"]):
+        filters.available_today = True
 
-    # Check Directory Intent
-    is_directory = bool(re.search(r"\b(all|every|directory|complete list|full list)\b", prompt_lower))
-    if is_directory and "limit" not in numeric_constraints:
-        filters.limit = 200
-        intent = IntentType.DIRECTORY
-
-    # Check Affordability Intent
-    is_cheap = bool(re.search(r"\b(cheap|cheapest|affordable|lowest fee|budget|low cost|free|\$0)\b", prompt_lower))
-    is_cheap_negated = any("cheap" in neg or "affordable" in neg for neg in negated_phrases)
-
-    if is_cheap and not is_cheap_negated:
-        intent = IntentType.AFFORDABILITY
-        filters.sort_by = SortMetric.CONSULTATION_FEE
-        filters.sort_order = SortOrder.ASC
-
-    # Check Distance Intent
-    is_dist_query = bool(re.search(r"\b(nearest|closest|shortest distance|near me|nearby|how far|who is closest)\b", prompt_lower))
-    if is_dist_query:
-        intent = IntentType.DISTANCE
+    # Sorting
+    if any(k in prompt_lower for k in ["closest", "nearest", "near me", "who is closest"]):
         filters.sort_by = SortMetric.DISTANCE_MILES
         filters.sort_order = SortOrder.ASC
-
-    # Check Availability Intent
-    is_avail_query = bool(re.search(r"\b(available today|available now|who is available|open today|see someone today)\b", prompt_lower))
-    if is_avail_query and not is_dist_query and not is_cheap:
-        intent = IntentType.AVAILABILITY
-        filters.available_today = True
-        filters.sort_by = SortMetric.NEXT_AVAILABLE_DATE
+    elif any(k in prompt_lower for k in ["cheapest", "lowest fee", "lowest cost", "affordable"]):
+        filters.sort_by = SortMetric.CONSULTATION_FEE
         filters.sort_order = SortOrder.ASC
-
-    # Check Explicit Ranking
-    if has_explicit_satisfaction:
-        intent = IntentType.RANKING
-        filters.sort_by = SortMetric.SATISFACTION_SCORE
-        filters.sort_order = SortOrder.DESC
-    elif has_explicit_success:
-        intent = IntentType.RANKING
+    elif any(k in prompt_lower for k in ["success rate", "highest success", "surgery success"]):
         filters.sort_by = SortMetric.SURGERY_SUCCESS_RATE
         filters.sort_order = SortOrder.DESC
+    elif any(k in prompt_lower for k in ["satisfaction", "top rated", "highest satisfaction"]):
+        filters.sort_by = SortMetric.SATISFACTION_SCORE
+        filters.sort_order = SortOrder.DESC
 
-    # Multi-constraint detection (e.g. specialty + distance + fee + availability)
-    # If 3 or more constraints are explicitly requested together
-    active_constraint_count = sum(1 for v in [filters.specialty, filters.max_distance, filters.max_fee, filters.min_success_rate, filters.min_satisfaction, filters.available_today] if v is not None)
-    if active_constraint_count >= 3:
+    # Multi-constraint check
+    active_constraints_count = sum([
+        1 if filters.specialty else 0,
+        1 if filters.max_fee is not None else 0,
+        1 if filters.max_distance is not None else 0,
+        1 if filters.available_today else 0
+    ])
+
+    # Determine intent type
+    if ambiguity_detected:
+        intent = IntentType.AMBIGUOUS
+    elif any(d in prompt_lower for d in ["directory", "list all", "all doctors", "show database", "show all"]):
+        intent = IntentType.DIRECTORY
+        filters.limit = 200
+    elif active_constraints_count >= 3:
+        intent = IntentType.DOCTOR_SEARCH
+    elif any(k in prompt_lower for k in ["closest", "nearest", "near me", "who is closest"]):
+        intent = IntentType.DISTANCE
+    elif any(k in prompt_lower for k in ["cheapest", "lowest fee", "lowest cost", "affordable", "free"]):
+        intent = IntentType.AFFORDABILITY
+    elif filters.available_today or "available" in prompt_lower:
+        intent = IntentType.AVAILABILITY
+    elif filters.sort_by:
+        intent = IntentType.RANKING
+    elif re.search(r"\b(hello|hi|hey|good morning)\b", prompt_lower):
+        intent = IntentType.GREETING
+    else:
         intent = IntentType.DOCTOR_SEARCH
 
     return IntentClassificationResult(
+        domain=DomainType.HEALTHCARE,
         intent=intent,
         confidence=0.95,
         filters=filters,
-        normalized_entities=normalized_entities,
-        negated_entities=negated_entities,
-        explanation=f"Parsed {intent.value} intent with {active_constraint_count} active database filter(s).",
-        raw_prompt=raw_prompt
+        negated_entities=negated_terms,
+        ambiguity_detected=ambiguity_detected,
+        ambiguity_reason=ambiguity_reason,
+        clarification_options=clarification_options,
+        contradictions_detected=contradictions,
+        explanation="Deterministic entity extraction and schema alignment.",
+        raw_prompt=prompt
     )
+
+
+# Backwards compatibility alias
+parse_intent_and_filters = classify_intent_and_extract_entities

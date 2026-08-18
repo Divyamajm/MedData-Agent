@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 
 from models import TestCase, TestCaseResult, IntentType
 from intent_parser import parse_intent_and_filters
-from query_engine import execute_doctor_search, build_safe_query
+from query_engine import execute_doctor_search, execute_housing_search, build_safe_query
 from database import init_database, get_connection
 from safety import validate_sql_sandbox_query
 from tests.test_cases import ALL_TEST_CASES
@@ -65,7 +65,17 @@ def run_single_test(test_case: TestCase) -> TestCaseResult:
     actual_params = []
     result_count = 0
 
-    if classification.intent in [IntentType.DOCTOR_SEARCH, IntentType.DIRECTORY, IntentType.AFFORDABILITY, IntentType.DISTANCE, IntentType.AVAILABILITY, IntentType.RANKING]:
+    if classification.intent == IntentType.HOUSING_SEARCH and classification.housing_filters:
+        query_res = execute_housing_search(classification.housing_filters)
+        actual_sql = query_res.sql_template
+        actual_params = query_res.params
+        result_count = query_res.row_count
+
+        if result_count < test_case.expected_min_results:
+            failures.append(
+                f"Expected at least {test_case.expected_min_results} properties, got {result_count}."
+            )
+    elif classification.intent in [IntentType.DOCTOR_SEARCH, IntentType.DIRECTORY, IntentType.AFFORDABILITY, IntentType.DISTANCE, IntentType.AVAILABILITY, IntentType.RANKING]:
         query_res = execute_doctor_search(classification.filters)
         actual_sql = query_res.sql_template
         actual_params = query_res.params
@@ -95,7 +105,7 @@ def run_single_test(test_case: TestCase) -> TestCaseResult:
 
 def run_all_tests(test_cases: List[TestCase] = ALL_TEST_CASES) -> List[TestCaseResult]:
     """Runs all automated test cases and returns structured results."""
-    init_database()  # Ensure database is prepared
+    init_database(force_reset=True)  # Ensure database is freshly prepared
     results = []
     for tc in test_cases:
         res = run_single_test(tc)
