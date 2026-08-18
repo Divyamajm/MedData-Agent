@@ -135,8 +135,8 @@ def parse_intent_with_llm(
         return None, 0.0, "No API key found in parameters or environment (GEMINI_API_KEY/OPENAI_API_KEY)."
 
     try:
-        # Determine provider and endpoint
-        if provider.lower() in ["gemini", "google"] or "AIza" in key:
+        # Determine provider and endpoint (OpenAI keys start with 'sk-', Gemini keys start with 'AIza' or 'AQ')
+        if provider.lower() in ["gemini", "google"] or "AIza" in key or key.startswith("AQ") or not key.startswith("sk-"):
             model = model_name or "gemini-2.0-flash"
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
             headers = {"Content-Type": "application/json"}
