@@ -57,16 +57,16 @@ st.divider()
 tab1, tab2, tab3 = st.tabs(["💬 AI Triage Agent", "🗄️ Database Explorer", "⚡ Interviewer SQL Sandbox"])
 
 # ==========================================
-# TAB 1: THE AI AGENT 
+# TAB 1: THE AI AGENT (WITH CONTEXT MEMORY)
 # ==========================================
 with tab1:
-    # Initialize Chat History and State
     if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "assistant", "content": "Hello. I am the MedData Triage Agent. Are you experiencing an emergency, looking to book an appointment, or searching for affordable care?", "type": "text"}]
     if "pending_clarification" not in st.session_state:
         st.session_state.pending_clarification = False
+    if "current_filter" not in st.session_state:
+        st.session_state.current_filter = None # THIS IS THE MEMORY FIX
 
-    # Render entire chat history (including tables)
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -76,38 +76,53 @@ with tab1:
                     st.write(f"**AI Logic Translation:** {msg['explanation']}")
                     st.code(msg['sql'], language="sql")
 
-    # If the AI paused to ask for clarification, show the Interactive Buttons!
+    # THE BUTTONS NOW USE MEMORY
     if st.session_state.pending_clarification:
         with st.chat_message("assistant"):
             st.markdown("⚠️ **Ambiguity Detected:** Please clarify what you mean by 'best':")
             
-            # Create two side-by-side buttons
             col1, col2 = st.columns(2)
             
             if col1.button("⭐ Highest Satisfaction Score"):
                 st.session_state.messages.append({"role": "user", "content": "Highest Satisfaction Score", "type": "text"})
-                sql = "SELECT name, specialty, satisfaction_score, consultation_fee FROM Doctors ORDER BY satisfaction_score DESC LIMIT 5"
-                explanation = "User clicked 'Satisfaction Score'. Sorted descending by score."
+                
+                # Check if we remembered a specialty
+                if st.session_state.current_filter:
+                    sql = f"SELECT name, specialty, satisfaction_score, consultation_fee FROM Doctors WHERE specialty = '{st.session_state.current_filter}' ORDER BY satisfaction_score DESC LIMIT 5"
+                    explanation = f"User clicked 'Satisfaction Score'. AI remembered context: filtered strictly by {st.session_state.current_filter}."
+                else:
+                    sql = "SELECT name, specialty, satisfaction_score, consultation_fee FROM Doctors ORDER BY satisfaction_score DESC LIMIT 5"
+                    explanation = "User clicked 'Satisfaction Score'. Sorted descending by score across all specialties."
+                    
                 df = pd.read_sql_query(sql, conn)
                 st.session_state.messages.append({"role": "assistant", "content": "Here are the top doctors by patient satisfaction:", "type": "data", "df": df, "sql": sql, "explanation": explanation})
-                st.session_state.pending_clarification = False # Turn off buttons
-                st.rerun() # Refresh the UI instantly
+                st.session_state.pending_clarification = False
+                st.session_state.current_filter = None # Clear memory
+                st.rerun()
                 
             if col2.button("📈 Highest Surgical Success Rate"):
                 st.session_state.messages.append({"role": "user", "content": "Highest Surgical Success Rate", "type": "text"})
-                sql = "SELECT name, specialty, primary_surgery, surgery_success_rate FROM Doctors ORDER BY surgery_success_rate DESC LIMIT 5"
-                explanation = "User clicked 'Surgical Success Rate'. Sorted descending by success rate."
+                
+                # Check if we remembered a specialty
+                if st.session_state.current_filter:
+                    sql = f"SELECT name, specialty, primary_surgery, surgery_success_rate FROM Doctors WHERE specialty = '{st.session_state.current_filter}' ORDER BY surgery_success_rate DESC LIMIT 5"
+                    explanation = f"User clicked 'Surgical Success Rate'. AI remembered context: filtered strictly by {st.session_state.current_filter}."
+                else:
+                    sql = "SELECT name, specialty, primary_surgery, surgery_success_rate FROM Doctors ORDER BY surgery_success_rate DESC LIMIT 5"
+                    explanation = "User clicked 'Surgical Success Rate'. Sorted descending by success rate across all specialties."
+                    
                 df = pd.read_sql_query(sql, conn)
                 st.session_state.messages.append({"role": "assistant", "content": "Here are the top doctors by surgical success rate:", "type": "data", "df": df, "sql": sql, "explanation": explanation})
-                st.session_state.pending_clarification = False # Turn off buttons
-                st.rerun() # Refresh the UI instantly
+                st.session_state.pending_clarification = False
+                st.session_state.current_filter = None # Clear memory
+                st.rerun()
 
-    # Chat Input Box
     elif prompt := st.chat_input("Ask the MedData Agent..."):
         st.session_state.messages.append({"role": "user", "content": prompt, "type": "text"})
         prompt_lower = prompt.lower()
+        st.session_state.current_filter = None # Reset memory on new prompts
         
-        # --- 1. LOCATION / EMERGENCY ROUTING ---
+        # --- LOCATION ---
         if any(word in prompt_lower for word in ["emergency", "urgent", "shortest", "distance", "closest", "near"]):
             sql = "SELECT name, specialty, distance_miles, is_available_today, consultation_fee FROM Doctors ORDER BY distance_miles ASC LIMIT 5"
             explanation = "AI detected intent for proximity/distance. Sorted database by 'distance_miles' in ascending order."
@@ -115,7 +130,7 @@ with tab1:
             st.session_state.messages.append({"role": "assistant", "content": "📍 **LOCATION PROTOCOL:** Finding the closest doctors to the hospital.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
             st.rerun()
             
-        # --- 2. FINANCIAL ROUTING ---
+        # --- FINANCIAL ---
         elif any(word in prompt_lower for word in ["cheap", "free", "fee", "affordable"]):
             sql = "SELECT name, specialty, consultation_fee, satisfaction_score, distance_miles FROM Doctors ORDER BY consultation_fee ASC, satisfaction_score DESC LIMIT 5"
             explanation = "Sorted primarily by lowest 'consultation_fee', using 'satisfaction_score' as a secondary tie-breaker."
@@ -123,39 +138,40 @@ with tab1:
             st.session_state.messages.append({"role": "assistant", "content": "💰 **FINANCIAL ROUTING:** Finding the most affordable care options.", "type": "data", "df": df, "sql": sql, "explanation": explanation})
             st.rerun()
 
-        # --- 3. AMBIGUITY INTERCEPTOR ---
+        # --- AMBIGUITY INTERCEPTOR (NOW SAVES TO MEMORY) ---
         elif "best" in prompt_lower or "top" in prompt_lower:
-            # TRIGGER THE BUTTON LOOP
+            specialties = ['cardiology', 'neurology', 'orthopedics', 'pediatrics', 'emergency']
+            for spec in specialties:
+                if spec in prompt_lower:
+                    st.session_state.current_filter = spec.capitalize() # Save specialty to memory!
+                    break
+                    
             st.session_state.pending_clarification = True
             st.rerun()
             
-        # --- 4. DIRECTORY INTENT & ENTITY EXTRACTION ---
+        # --- DIRECTORY INTENT ---
         elif any(word in prompt_lower for word in ["all", "every", "list"]):
-            
-            # Scan the sentence for specific specialties
             specialties = ['cardiology', 'neurology', 'orthopedics', 'pediatrics', 'emergency']
             found_specialty = None
-            
             for spec in specialties:
                 if spec in prompt_lower:
-                    found_specialty = spec.capitalize() # Capitalize to match database format
+                    found_specialty = spec.capitalize()
                     break
             
-            # Dynamically build the SQL based on what the AI found
             if found_specialty:
                 sql = f"SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors WHERE specialty = '{found_specialty}'"
-                explanation = f"AI detected 'all' intent AND extracted an entity ('{found_specialty}'). Injected a strict WHERE clause to filter the directory."
+                explanation = f"AI detected 'all' intent AND extracted an entity ('{found_specialty}'). Injected a strict WHERE clause."
                 msg_content = f"📋 **DIRECTORY PROTOCOL:** Fetching all our **{found_specialty}** specialists."
             else:
                 sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors"
-                explanation = "AI detected intent for the full dataset but no specific specialty. Removed the 'LIMIT 5' constraint to show everyone."
+                explanation = "AI detected intent for the full dataset but no specific specialty. Removed the 'LIMIT 5' constraint."
                 msg_content = "📋 **DIRECTORY PROTOCOL:** Fetching the complete directory of all doctors."
             
             df = pd.read_sql_query(sql, conn)
             st.session_state.messages.append({"role": "assistant", "content": msg_content, "type": "data", "df": df, "sql": sql, "explanation": explanation})
             st.rerun()
             
-        # --- 5. STANDARD FALLBACK ---
+        # --- STANDARD FALLBACK ---
         else:
             sql = "SELECT name, specialty, distance_miles, consultation_fee, next_available_date FROM Doctors LIMIT 5"
             explanation = "Generic query detected. Applied standard 'LIMIT 5' for UI safety."
