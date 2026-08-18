@@ -93,7 +93,7 @@ class SearchFilters(BaseModel):
     max_fee: Optional[int] = Field(
         default=None, 
         ge=0, 
-        description="Maximum consultation fee in USD ($)"
+        description="Maximum consultation fee in INR (₹)"
     )
     available_today: Optional[bool] = Field(
         default=None, 

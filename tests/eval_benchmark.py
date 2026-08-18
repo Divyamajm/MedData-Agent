@@ -1,5 +1,5 @@
 """
-MedData AI -- 270-Query Comprehensive Scientific Evaluation Benchmark
+MedData AI -- 290-Query Comprehensive Scientific Evaluation Benchmark
 ======================================================================
 Evaluates the Grounded AI Agent across 9 critical dimensions:
 1. Intent Classification Accuracy (%)
@@ -41,7 +41,7 @@ class EvalTestCase:
     notes: str = ""
 
 
-# Comprehensive 270-Query Labeled Dataset
+# Comprehensive 290-Query Labeled Dataset
 BENCHMARK_DATASET: List[EvalTestCase] = [
     # =========================================================================
     # 1. CLINICAL SPECIALTY SEARCH (30 cases)
