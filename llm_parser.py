@@ -77,8 +77,8 @@ def parse_intent_with_llm(
     start_time = time.perf_counter()
     
     # 1. First run deterministic instant safety pre-checks
-    is_injection, inj_reason = check_prompt_injection(query)
-    if is_injection:
+    inj_check = check_prompt_injection(query)
+    if inj_check and inj_check.get("is_injection"):
         latency = (time.perf_counter() - start_time) * 1000
         return IntentClassificationResult(
             raw_prompt=query,
@@ -87,7 +87,7 @@ def parse_intent_with_llm(
             ambiguity_detected=False,
             confidence=1.0,
             filters=SearchFilters(),
-            explanation=f"Blocked by deterministic security pre-screen: {inj_reason}"
+            explanation=inj_check.get("message", "Blocked by deterministic security pre-screen.")
         ), latency, None
 
     em_check = check_acute_emergency(query)
