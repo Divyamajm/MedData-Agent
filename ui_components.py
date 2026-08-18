@@ -438,12 +438,22 @@ def render_dynamic_dataset_view(df: pd.DataFrame, profile: Any, search_result: O
         avg_rating = df[profile.primary_rating_col].mean()
         c4.metric(f"Avg {profile.primary_rating_col}", f"{avg_rating:.2f}")
 
-    # Display Query Results if query was run
-    if search_result and "data" in search_result:
-        res_df = search_result["data"]
-        st.markdown(f"#### 🎯 Query Results: **{len(res_df)} matches found**")
-        st.caption(f"Applied Rules: {', '.join(search_result.get('applied_rules', []))}")
-        st.dataframe(res_df, hide_index=True)
+    # Display Query Results or Ambiguity Clarification
+    if search_result:
+        if search_result.get("ambiguity_detected"):
+            st.warning(f"⚠️ **Ambiguity Intercepted (Zero-Hallucination Policy):** {search_result.get('ambiguity_reason')}")
+            st.markdown("##### 💡 What is your primary priority? (Click to rank deterministically):")
+            options = search_result.get("clarification_options", [])
+            cols = st.columns(len(options))
+            for i, opt in enumerate(options):
+                if cols[i].button(opt, key=f"dyn_clarify_btn_{i}"):
+                    st.session_state["dynamic_search_input"] = opt
+                    st.rerun()
+        elif search_result.get("data") is not None:
+            res_df = search_result["data"]
+            st.markdown(f"#### 🎯 Query Results: **{len(res_df)} matches found**")
+            st.caption(f"Applied Rules: {', '.join(search_result.get('applied_rules', []))}")
+            st.dataframe(res_df, hide_index=True)
     else:
         st.markdown("#### 📋 Raw Dataset Preview (Top 10 Records)")
         st.dataframe(df.head(10), hide_index=True)
@@ -486,11 +496,13 @@ def render_audit_trail(audit: ExplainabilityAudit):
 
 def render_clarification_buttons(options: List[str]):
     """Renders interactive clarification buttons for ambiguous prompts."""
-    st.markdown("##### 💡 Please clarify your primary priority:")
+    st.markdown("##### 💡 Please clarify your primary priority (Zero-Hallucination Disambiguation):")
     cols = st.columns(len(options))
     for i, opt in enumerate(options):
         if cols[i].button(opt, key=f"clarify_btn_{i}"):
-            st.session_state["active_prompt"] = f"Find best doctor sorted by {opt}"
+            st.session_state.pending_clarification = False
+            st.session_state.clarification_data = None
+            st.session_state["sample_to_run"] = f"Sort by {opt}"
             st.rerun()
 
 

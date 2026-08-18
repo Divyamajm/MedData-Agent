@@ -199,13 +199,83 @@ def profile_dataframe(df: pd.DataFrame, table_name: str = "Uploaded_Data") -> Ta
 def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: str) -> Dict[str, Any]:
     """
     Executes a zero-shot natural language filter/query over any arbitrary dataset
-    using the auto-inferred semantic schema profile.
+    using the auto-inferred semantic schema profile. Enforces zero-hallucination
+    ambiguity interception when subjective queries ('best', 'top', 'recommend') lack criteria.
     """
     prompt_lower = prompt.lower().strip()
-    filtered_df = df.copy()
     applied_rules = []
     
-    # 1. Price / Cost Filtering (Support ₹, Rs, K, Lakhs, INR)
+    # 0. Ambiguity Interception (Subjective 'best' / 'top' / 'recommend' queries)
+    is_subjective_query = bool(re.search(r"\b(best|top|good|recommended|give me the best|show best|which is best|ideal)\b", prompt_lower))
+    has_specific_filter = bool(
+        re.search(r"(?:under|below|less than|<=|<|>|>=|above|\$|₹|rs\.?|\d+|diesel|petrol|cng|lakh|bhk)", prompt_lower) or
+        any(k in prompt_lower for k in ["fee", "fees", "placement", "salary", "lpa", "rank", "ranking", "cheapest", "lowest", "mileage", "safest", "package", "school", "rate", "year"])
+    )
+
+    if is_subjective_query and not has_specific_filter:
+        clarification_options = []
+        if "Colleges" in profile.table_name or "Education" in profile.inferred_domain or "NIRF" in profile.table_name:
+            clarification_options = [
+                "🏆 Highest NIRF National Ranking",
+                "💰 Highest Average Placement Package (LPA)",
+                "📉 Lowest Annual Tuition Fees (Affordable)",
+                "🎯 Highest Placement Rate (%)"
+            ]
+        elif "Cars" in profile.table_name or "Automotive" in profile.inferred_domain:
+            clarification_options = [
+                "💰 Lowest Price (Most Affordable)",
+                "⛽ Highest Fuel Efficiency (Mileage kmpl)",
+                "🚗 Lowest Kilometers Driven",
+                "🆕 Latest Model Year"
+            ]
+        elif "Salary" in profile.table_name or "Tech" in profile.table_name or "Job" in profile.table_name:
+            clarification_options = [
+                "💰 Highest Annual Compensation (LPA)",
+                "💼 Lowest Experience Required",
+                "🏢 Remote / Hybrid Friendly"
+            ]
+        else:
+            if profile.primary_rating_col:
+                clarification_options.append(f"⭐ Highest {profile.primary_rating_col}")
+            if profile.primary_price_col:
+                clarification_options.append(f"📉 Lowest {profile.primary_price_col}")
+            for col_name, col_p in profile.columns.items():
+                if col_p.semantic_role == SemanticColumnRole.GENERIC_NUMERIC and col_name not in [profile.primary_price_col, profile.primary_rating_col]:
+                    clarification_options.append(f"📈 Highest {col_name}")
+
+        return {
+            "success": True,
+            "ambiguity_detected": True,
+            "ambiguity_reason": f"Subjective query '{prompt}' is ambiguous. In MedData's zero-hallucination architecture, we do not guess what 'best' means for you.",
+            "clarification_options": clarification_options,
+            "total_matches": 0,
+            "returned_rows": 0,
+            "data": None,
+            "applied_rules": ["Ambiguity Intercepted - Awaiting User Clarification"],
+            "table_name": profile.table_name,
+            "inferred_domain": profile.inferred_domain
+        }
+
+    filtered_df = df.copy()
+
+    # 1. Specialized Education / College Sort Rules
+    if "nirf" in prompt_lower or "national rank" in prompt_lower or "ranking" in prompt_lower:
+        if "NIRF_Rank" in filtered_df.columns:
+            filtered_df = filtered_df.sort_values(by="NIRF_Rank", ascending=True)
+            applied_rules.append("Sorted by NIRF National Rank (1 = Top Rank)")
+    elif any(k in prompt_lower for k in ["placement package", "package", "highest placement", "lpa"]):
+        if "Avg_Package_LPA" in filtered_df.columns:
+            filtered_df = filtered_df.sort_values(by="Avg_Package_LPA", ascending=False)
+            applied_rules.append("Sorted by Average Placement Package LPA (DESC)")
+        elif "Salary_INR_LPA" in filtered_df.columns:
+            filtered_df = filtered_df.sort_values(by="Salary_INR_LPA", ascending=False)
+            applied_rules.append("Sorted by Annual Salary LPA (DESC)")
+    elif "placement rate" in prompt_lower:
+        if "Placement_Rate" in filtered_df.columns:
+            filtered_df = filtered_df.sort_values(by="Placement_Rate", ascending=False)
+            applied_rules.append("Sorted by Placement Rate % (DESC)")
+
+    # 2. Price / Cost Filtering (Support ₹, Rs, K, Lakhs, INR)
     price_col = profile.primary_price_col
     if price_col and price_col in filtered_df.columns:
         lakh_match = re.search(r"(?:under|below|less than|<=|<|\$|₹|rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|l)\b", prompt_lower)
@@ -224,7 +294,7 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
             filtered_df = filtered_df[filtered_df[price_col] <= target_max_price]
             applied_rules.append(f"Price / Fee ({price_col}) ≤ ₹{int(target_max_price):,}")
 
-    # 2. Rating / Score Filtering
+    # 3. Rating / Score Filtering
     rating_col = profile.primary_rating_col
     if rating_col and rating_col in filtered_df.columns:
         rating_match = re.search(r"(?:rating|score|stars?)\s*(?:>=|>|above|at least|min)\s*(\d+(?:\.\d+)?)", prompt_lower)
@@ -232,11 +302,8 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
             min_r = float(rating_match.group(1))
             filtered_df = filtered_df[filtered_df[rating_col] >= min_r]
             applied_rules.append(f"Score ({rating_col}) ≥ {min_r}")
-        elif any(k in prompt_lower for k in ["top rated", "best", "highest rated", "top score"]):
-            filtered_df = filtered_df.sort_values(by=rating_col, ascending=False)
-            applied_rules.append(f"Sorted by highest {rating_col} (DESC)")
 
-    # 3. Categorical / Locality / Keyword Filtering
+    # 4. Categorical / Locality / Keyword Filtering
     for col_name, col_prof in profile.columns.items():
         if col_prof.semantic_role == SemanticColumnRole.CATEGORY_TYPE:
             unique_vals = [str(v) for v in df[col_name].dropna().unique()]
@@ -246,11 +313,11 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
                     applied_rules.append(f"Filtered {col_name} == '{val}'")
                     break
 
-    # 4. Sorting & Ordering
-    if any(k in prompt_lower for k in ["cheapest", "lowest price", "lowest fee", "lowest rent", "affordable", "budget"]):
+    # 5. Sorting & Ordering
+    if any(k in prompt_lower for k in ["cheapest", "lowest price", "lowest fee", "lowest fees", "lowest tuition", "lowest rent", "affordable", "budget", "lowest cost", "tuition fees"]):
         if price_col and price_col in filtered_df.columns:
             filtered_df = filtered_df.sort_values(by=price_col, ascending=True)
-            applied_rules.append(f"Sorted by lowest {price_col} (ASC)")
+            applied_rules.append(f"Sorted by lowest {price_col} (ASC - Most Affordable)")
     elif any(k in prompt_lower for k in ["safest", "lowest crime", "low crime"]):
         for col_name, col_prof in profile.columns.items():
             if col_prof.semantic_role == SemanticColumnRole.SAFETY_RISK:
@@ -258,7 +325,7 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
                 applied_rules.append(f"Sorted by lowest {col_name} (ASC - Safest)")
                 break
 
-    # 5. Limit / Rows
+    # 6. Limit / Rows
     limit = 25
     if "all" in prompt_lower or "directory" in prompt_lower or "everything" in prompt_lower:
         limit = len(filtered_df)
@@ -267,6 +334,7 @@ def execute_dynamic_nl_query(df: pd.DataFrame, profile: TableProfile, prompt: st
 
     return {
         "success": True,
+        "ambiguity_detected": False,
         "total_matches": len(filtered_df),
         "returned_rows": len(result_df),
         "data": result_df,

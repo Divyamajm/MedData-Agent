@@ -347,12 +347,37 @@ def classify_intent_and_extract_entities(prompt: str, active_domain: Optional[Do
     # 2. If Real Estate domain, route to Housing Parser
     if domain == DomainType.REAL_ESTATE:
         housing_filters = parse_housing_constraints(prompt)
+        prompt_lower = prompt.lower()
+        ambiguity_detected = False
+        clarification_options = []
+        ambiguity_reason = None
+
+        if re.search(r"\b(best|top|recommended|highest rated|ideal)\b", prompt_lower):
+            has_price = bool(re.search(r"(?:under|below|budget|max|\$|₹|rs\.?|\d+k|\d+lakh)", prompt_lower))
+            has_crime = bool(re.search(r"\b(safe|crime|safety)\b", prompt_lower))
+            has_school = bool(re.search(r"\b(school|education|cbse|icse)\b", prompt_lower))
+            has_distance = bool(re.search(r"\b(near|close|hospital|transit|metro)\b", prompt_lower))
+            has_neighborhood = bool(housing_filters.neighborhood or housing_filters.city)
+
+            if not (has_price or has_crime or has_school or has_distance or has_neighborhood):
+                ambiguity_detected = True
+                ambiguity_reason = "The term 'best' in real estate is subjective. In MedData's zero-hallucination model, we do not make assumptions."
+                clarification_options = [
+                    "🏆 Highest Overall Livability Score",
+                    "💵 Lowest Monthly Rent (Affordable)",
+                    "🛡️ Safest Neighborhood (Lowest Crime)",
+                    "🎓 Highest Rated Schools (10/10)"
+                ]
+
         return IntentClassificationResult(
             domain=DomainType.REAL_ESTATE,
-            intent=IntentType.HOUSING_SEARCH,
+            intent=IntentType.AMBIGUOUS if ambiguity_detected else IntentType.HOUSING_SEARCH,
             confidence=0.95,
             housing_filters=housing_filters,
-            explanation="Deterministic Real Estate & Livability constraint extraction.",
+            ambiguity_detected=ambiguity_detected,
+            ambiguity_reason=ambiguity_reason,
+            clarification_options=clarification_options,
+            explanation="Deterministic Real Estate & Livability constraint extraction with zero-hallucination ambiguity interception.",
             raw_prompt=prompt
         )
 
