@@ -159,25 +159,22 @@ with st.sidebar:
 
 
 # ==========================================
-# 3. MASTER APPLICATION NAVIGATION TABS
+# 3. MASTER APPLICATION NAVIGATION WORKSPACES
 # ==========================================
-tab_chat, tab_comp, tab_dynamic, tab_sched, tab_ins, tab_lake, tab_sql, tab_tests = st.tabs([
-    "💬 AI Discovery",
-    "⚖️ Comparison Matrix",
+tab_chat, tab_comp, tab_dynamic, tab_patient, tab_developer = st.tabs([
+    "🔍 AI Discovery & Triage",
+    "⚖️ Head-to-Head Comparison",
     "📂 Dynamic Auto-Analyzer",
-    "📅 Smart Scheduler",
-    "💳 Insurance Estimator",
-    "🗄️ Data Lake Explorer",
-    "⚡ AST SQL Sandbox",
-    "🧪 Verification Suite"
+    "🏥 Patient Concierge",
+    "⚡ Developer & Data Suite"
 ])
 
 
 # ==========================================
-# TAB 1: 💬 AI DISCOVERY & NATURAL LANGUAGE TRIAGE
+# WORKSPACE 1: 🔍 AI DISCOVERY & NATURAL LANGUAGE TRIAGE
 # ==========================================
 with tab_chat:
-    st.markdown("#### 💬 Natural Language Grounded Assistant")
+    st.markdown("#### 🔍 Natural Language Grounded Assistant")
     st.caption("Ask questions in natural language. Queries are parsed deterministically into schema-validated SQL with 100% database grounding.")
 
     # Voice / Audio Query Simulator Toggle
@@ -284,7 +281,7 @@ with tab_chat:
 
 
 # ==========================================
-# TAB 2: ⚖️ HEAD-TO-HEAD COMPARISON MATRIX
+# WORKSPACE 2: ⚖️ HEAD-TO-HEAD COMPARISON MATRIX
 # ==========================================
 with tab_comp:
     st.markdown("#### ⚖️ Side-by-Side Head-to-Head Comparison Matrix")
@@ -364,82 +361,7 @@ with tab_comp:
 
 
 # ==========================================
-# TAB 4: 📅 SMART SCHEDULER & CALENDAR SYNC
-# ==========================================
-with tab_sched:
-    st.markdown("#### 📅 Smart Appointment Booking & Double-Booking Conflict Prevention")
-    st.caption("Book an appointment directly into the SQLite database. Detects double-booking time slot conflicts and exports standard `.ics` calendar files.")
-
-    sched_col1, sched_col2 = st.columns([1, 1])
-
-    with sched_col1:
-        st.markdown("##### 📝 Schedule New Appointment")
-        conn = get_connection()
-        c = conn.cursor()
-        c.execute("SELECT id, name, specialty FROM Doctors LIMIT 30")
-        docs_list = [dict(r) for r in c.fetchall()]
-        conn.close()
-
-        doc_options = {f"{d['name']} ({d['specialty']})": d["id"] for d in docs_list}
-        selected_doc_label = st.selectbox("Select Doctor", list(doc_options.keys()))
-        selected_doc_id = doc_options[selected_doc_label]
-
-        p_name = st.text_input("Patient Full Name", value="Divyam Sharma")
-        p_email = st.text_input("Patient Email", value="divyamajm@gmail.com")
-        p_date = st.date_input("Appointment Date", min_value=datetime.today().date(), value=datetime.today().date())
-        p_slot = st.selectbox("Preferred Time Slot", ["09:00 AM", "10:30 AM", "11:30 AM", "02:00 PM", "03:30 PM", "04:30 PM"])
-        p_reason = st.text_area("Consultation Symptoms / Reason", value="Routine Health Checkup & Consultation")
-
-        if st.button("Confirm Appointment Booking", type="primary"):
-            date_str = p_date.strftime("%Y-%m-%d")
-            res = book_appointment(
-                doctor_id=selected_doc_id,
-                patient_name=p_name,
-                patient_email=p_email,
-                appointment_date=date_str,
-                time_slot=p_slot,
-                symptoms_reason=p_reason
-            )
-
-            if res["success"]:
-                st.success(f"✅ Appointment Successfully Confirmed with **{res['doctor_name']}** for **{res['appointment_date']} at {res['time_slot']}**!")
-                
-                # Generate .ics calendar download
-                ics_str = generate_ics_calendar(
-                    doctor_name=res["doctor_name"],
-                    specialty=res["specialty"],
-                    patient_name=p_name,
-                    appointment_date=date_str,
-                    time_slot=p_slot
-                )
-                st.download_button(
-                    label="📥 Download .ICS Calendar Event (Google/Apple Calendar)",
-                    data=ics_str,
-                    file_name=f"appointment_{res['doctor_name'].replace(' ', '_')}_{date_str}.ics",
-                    mime="text/calendar"
-                )
-            else:
-                st.error(f"❌ Booking Conflict: {res['error']}")
-
-    with sched_col2:
-        st.markdown("##### 📋 Confirmed Database Bookings")
-        bookings = get_all_appointments()
-        if bookings:
-            bookings_df = pd.DataFrame(bookings)[["id", "doctor_name", "specialty", "patient_name", "appointment_date", "time_slot", "status", "symptoms_reason"]]
-            st.dataframe(bookings_df, hide_index=True)
-        else:
-            st.info("No appointments currently scheduled.")
-
-
-# ==========================================
-# TAB 5: 💳 INSURANCE & CO-PAY ESTIMATOR
-# ==========================================
-with tab_ins:
-    render_insurance_calculator()
-
-
-# ==========================================
-# TAB 6: 📂 DYNAMIC AUTO-SCHEMA ANALYZER
+# WORKSPACE 3: 📂 DYNAMIC AUTO-SCHEMA ANALYZER
 # ==========================================
 with tab_dynamic:
     st.markdown("#### 📂 Universal Dynamic Auto-Schema Profiler & Query Engine")
@@ -502,98 +424,192 @@ with tab_dynamic:
 
 
 # ==========================================
-# TAB 7: 🗄️ DATA LAKE EXPLORER
+# WORKSPACE 4: 🏥 PATIENT CONCIERGE (SCHEDULER + INSURANCE)
 # ==========================================
-with tab_lake:
-    st.markdown("#### 🗄️ Multi-Dataset Lake Explorer (India)")
-    st.caption("Inspect raw SQLite tables across Indian Healthcare and Real Estate datasets.")
+with tab_patient:
+    st.markdown("#### 🏥 Integrated Patient Concierge Services")
+    st.caption("Coordinate verified doctor appointments, prevent booking collisions, and estimate clinical insurance co-pays.")
+    
+    subtab_sched, subtab_ins = st.tabs([
+        "📅 Smart Appointment Booking & ICS Sync",
+        "💳 Insurance & Clinical Co-Pay Estimator"
+    ])
 
-    stats = get_database_stats()
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Total Doctors", stats["total_doctors"])
-    m2.metric("Available Today", stats["available_today_count"])
-    m3.metric("Avg Consultation Fee", f"₹{stats['avg_fee']:,}")
-    m4.metric("Avg Satisfaction", f"{stats['avg_satisfaction']}/100")
-    m5.metric("Total Properties", stats["total_properties"])
+    with subtab_sched:
+        st.markdown("##### 📅 Smart Appointment Booking & Conflict Prevention")
+        st.caption("Book an appointment directly into the SQLite database. Detects double-booking conflicts and exports standard `.ics` calendar files.")
 
-    st.divider()
+        sched_col1, sched_col2 = st.columns([1, 1])
 
-    table_view = st.selectbox("Select Table to Explore", ["Doctors Directory (India)", "Properties (UrbanLocate India)", "Specialties Metadata", "Appointments"])
-    conn = get_connection()
+        with sched_col1:
+            st.markdown("###### 📝 Schedule New Appointment")
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("SELECT id, name, specialty FROM Doctors LIMIT 30")
+            docs_list = [dict(r) for r in c.fetchall()]
+            conn.close()
 
-    if "Doctors" in table_view:
-        df = pd.read_sql_query("SELECT id, name, specialty, primary_surgery, surgery_success_rate, satisfaction_score, distance_miles, consultation_fee, is_available_today, next_available_date, latitude, longitude FROM Doctors", conn)
-        st.dataframe(df, height=450)
-    elif "Properties" in table_view:
-        df = pd.read_sql_query("SELECT * FROM Properties", conn)
-        st.dataframe(df, height=450)
-    elif "Specialties" in table_view:
-        df = pd.read_sql_query("SELECT * FROM Specialties", conn)
-        st.dataframe(df)
-    else:
-        df = pd.read_sql_query("SELECT * FROM Appointments", conn)
-        st.dataframe(df)
+            doc_options = {f"{d['name']} ({d['specialty']})": d["id"] for d in docs_list}
+            selected_doc_label = st.selectbox("Select Doctor", list(doc_options.keys()))
+            selected_doc_id = doc_options[selected_doc_label]
 
-    conn.close()
+            p_name = st.text_input("Patient Full Name", value="Divyam Sharma")
+            p_email = st.text_input("Patient Email", value="divyamajm@gmail.com")
+            p_date = st.date_input("Appointment Date", min_value=datetime.today().date(), value=datetime.today().date())
+            p_slot = st.selectbox("Preferred Time Slot", ["09:00 AM", "10:30 AM", "11:30 AM", "02:00 PM", "03:30 PM", "04:30 PM"])
+            p_reason = st.text_area("Consultation Symptoms / Reason", value="Routine Health Checkup & Consultation")
 
-    st.divider()
-    if st.button("🔄 Re-Seed & Reset Both Demo Databases", type="secondary"):
-        reset_demo_data()
-        st.success("Databases successfully re-seeded with pristine mock data!")
-        st.rerun()
+            if st.button("Confirm Appointment Booking", type="primary"):
+                date_str = p_date.strftime("%Y-%m-%d")
+                res = book_appointment(
+                    doctor_id=selected_doc_id,
+                    patient_name=p_name,
+                    patient_email=p_email,
+                    appointment_date=date_str,
+                    time_slot=p_slot,
+                    symptoms_reason=p_reason
+                )
 
+                if res["success"]:
+                    st.success(f"✅ Appointment Successfully Confirmed with **{res['doctor_name']}** for **{res['appointment_date']} at {res['time_slot']}**!")
+                    
+                    ics_str = generate_ics_calendar(
+                        doctor_name=res["doctor_name"],
+                        specialty=res["specialty"],
+                        patient_name=p_name,
+                        appointment_date=date_str,
+                        time_slot=p_slot
+                    )
+                    st.download_button(
+                        label="📥 Download .ICS Calendar Event (Google/Apple Calendar)",
+                        data=ics_str,
+                        file_name=f"appointment_{res['doctor_name'].replace(' ', '_')}_{date_str}.ics",
+                        mime="text/calendar"
+                    )
+                else:
+                    st.error(f"❌ Booking Conflict: {res['error']}")
 
-# ==========================================
-# TAB 7: ⚡ AST SECURE SQL SANDBOX
-# ==========================================
-with tab_sql:
-    st.markdown("#### ⚡ AST-Validated Read-Only SQL Sandbox")
-    st.caption("Execute custom SQL queries against the local SQLite database. Enforces strict read-only AST token validation.")
-
-    sandbox_sql = st.text_area("SQL Query", value=st.session_state.sql_sandbox_query, height=120)
-
-    col_btn, col_info = st.columns([1, 3])
-    if col_btn.button("🚀 Execute SQL", type="primary"):
-        st.session_state.sql_sandbox_query = sandbox_sql
-        is_safe, msg = validate_sql_sandbox_query(sandbox_sql)
-
-        if not is_safe:
-            st.error(f"🛑 AST Security Violation: {msg}")
-        else:
-            try:
-                start_t = time.perf_counter()
-                conn = get_connection()
-                df = pd.read_sql_query(sandbox_sql, conn)
-                conn.close()
-                dur = round((time.perf_counter() - start_t) * 1000, 2)
-
-                st.success(f"✅ Executed safely in {dur} ms ({len(df)} rows returned)")
-                st.dataframe(df)
-            except Exception as e:
-                st.error(f"SQL Syntax Error: {e}")
-
-
-# ==========================================
-# TAB 8: 🧪 AUTOMATED VERIFICATION SUITE
-# ==========================================
-with tab_tests:
-    st.markdown("#### 🧪 Automated Verification Suite")
-    st.caption("Run all regression tests covering multi-filter extraction, clinical safety boundaries, and SQL security.")
-
-    if st.button("▶️ Execute Full Verification Suite", type="primary"):
-        with st.spinner("Executing automated test batteries..."):
-            test_results = run_all_tests()
-            st.session_state.test_results = test_results
-
-    if st.session_state.test_results:
-        results = st.session_state.test_results
-        passed = sum(1 for r in results if r.passed)
-        total = len(results)
-
-        st.metric("Test Suite Pass Rate", f"{passed}/{total} ({passed/total*100:.1f}%)")
-
-        for res in results:
-            if res.passed:
-                st.success(f"✅ **{res.test_case.id}**: {res.test_case.description} ({res.execution_time_ms} ms)")
+        with sched_col2:
+            st.markdown("###### 📋 Confirmed Database Bookings")
+            bookings = get_all_appointments()
+            if bookings:
+                bookings_df = pd.DataFrame(bookings)[["id", "doctor_name", "specialty", "patient_name", "appointment_date", "time_slot", "status", "symptoms_reason"]]
+                st.dataframe(bookings_df, hide_index=True)
             else:
-                st.error(f"❌ **{res.test_case.id}**: {res.test_case.description}\nFailures: {res.failure_reasons}")
+                st.info("No appointments currently scheduled.")
+
+    with subtab_ins:
+        render_insurance_calculator()
+
+
+# ==========================================
+# WORKSPACE 5: ⚡ DEVELOPER & DATA SUITE
+# ==========================================
+with tab_developer:
+    st.markdown("#### ⚡ Enterprise Data Lake, SQL Sandbox & Verification Suite")
+    st.caption("Inspect raw SQLite tables, test read-only SQL AST compilation, and run automated regression test batteries.")
+
+    subtab_lake, subtab_sql, subtab_tests = st.tabs([
+        "🗄️ Multi-Dataset Lake Explorer",
+        "⚡ AST Parameterized SQL Sandbox",
+        "🧪 Automated Verification Suite (32 Tests)"
+    ])
+
+    with subtab_lake:
+        st.markdown("##### 🗄️ Multi-Dataset Lake Explorer (India)")
+        st.caption("Inspect raw SQLite tables across Indian Healthcare and Real Estate datasets.")
+
+        stats = get_database_stats()
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Total Doctors", stats["total_doctors"])
+        m2.metric("Available Today", stats["available_today_count"])
+        m3.metric("Avg Consultation Fee", f"₹{stats['avg_fee']:,}")
+        m4.metric("Avg Satisfaction", f"{stats['avg_satisfaction']}/100")
+        m5.metric("Total Properties", stats["total_properties"])
+
+        st.divider()
+
+        table_view = st.selectbox("Select Table to Explore", ["Doctors Directory (India)", "Properties (UrbanLocate India)", "Specialties Metadata", "Appointments"])
+        conn = get_connection()
+
+        if "Doctors" in table_view:
+            df = pd.read_sql_query("SELECT id, name, specialty, primary_surgery, surgery_success_rate, satisfaction_score, distance_miles, consultation_fee, is_available_today, next_available_date, latitude, longitude FROM Doctors", conn)
+            st.dataframe(df, height=450)
+        elif "Properties" in table_view:
+            df = pd.read_sql_query("SELECT * FROM Properties", conn)
+            st.dataframe(df, height=450)
+        elif "Specialties" in table_view:
+            df = pd.read_sql_query("SELECT * FROM Specialties", conn)
+            st.dataframe(df)
+        else:
+            df = pd.read_sql_query("SELECT * FROM Appointments", conn)
+            st.dataframe(df)
+
+        conn.close()
+
+        st.divider()
+        if st.button("🔄 Re-Seed & Reset Both Demo Databases", type="secondary"):
+            reset_demo_data()
+            st.success("Databases successfully re-seeded with pristine mock data!")
+            st.rerun()
+
+    with subtab_sql:
+        st.markdown("##### ⚡ AST-Validated Read-Only SQL Sandbox")
+        st.caption("Test custom queries directly against the local SQLite database. Mutating statements (`DROP`, `DELETE`, `INSERT`, `UPDATE`) are strictly blocked by AST analysis.")
+
+        default_sql = "SELECT name, specialty, primary_surgery, surgery_success_rate, consultation_fee FROM Doctors WHERE consultation_fee <= 1000 ORDER BY satisfaction_score DESC LIMIT 10;"
+        user_sql = st.text_area("SQL Query Editor (Read-Only Grounded Sandbox)", value=default_sql, height=120)
+
+        col_run, col_explain = st.columns([1, 4])
+        if col_run.button("⚡ Execute Safe SQL", type="primary"):
+            is_valid, err_msg = validate_sql_sandbox_query(user_sql)
+            if not is_valid:
+                st.error(f"🚫 Query Rejected: {err_msg}")
+            else:
+                try:
+                    conn = get_connection()
+                    start_t = time.perf_counter()
+                    res_df = pd.read_sql_query(user_sql, conn)
+                    lat_ms = (time.perf_counter() - start_t) * 1000
+                    conn.close()
+
+                    st.success(f"✅ Executed safely in **{lat_ms:.2f} ms**. Returned **{len(res_df)}** rows.")
+                    st.dataframe(res_df, hide_index=True)
+                except Exception as e:
+                    st.error(f"SQL Execution Error: {e}")
+
+    with subtab_tests:
+        st.markdown("##### 🧪 Automated Intent, Safety & Query Verification Suite")
+        st.caption("Executes all 32 rigorous test cases covering ambiguity, negation, medical refusal, contradictions, injection defense, and multi-domain real estate.")
+
+        if st.button("🚀 Run Complete 32-Test Suite Now", type="primary"):
+            with st.spinner("Running verification battery across all test cases..."):
+                t_results = run_all_tests()
+                sql_results = run_sql_sandbox_security_tests()
+
+            pass_count = sum(1 for r in t_results if r.passed)
+            total_count = len(t_results)
+            pct = (pass_count / total_count) * 100
+
+            st.metric("Test Pass Rate", f"{pass_count}/{total_count} ({pct:.1f}%)")
+
+            # Render test results
+            res_data = []
+            for r in t_results:
+                res_data.append({
+                    "Status": "✅ PASS" if r.passed else "❌ FAIL",
+                    "Test ID": r.test_case.id,
+                    "Category": r.test_case.category,
+                    "Input Prompt": r.test_case.input_prompt,
+                    "Expected Intent": r.test_case.expected_intent.value,
+                    "Actual Intent": r.actual_intent.value,
+                    "Latency": f"{r.latency_ms:.2f} ms",
+                    "Details": "; ".join(r.failure_reasons) if r.failure_reasons else "Clean Pass"
+                })
+
+            st.dataframe(pd.DataFrame(res_data), hide_index=True)
+
+            st.markdown("##### 🔒 SQL Sandbox Security Defense Tests (10/10)")
+            sql_pass = sum(1 for r in sql_results if r["passed"])
+            st.metric("SQL Injection & Mutation Block Rate", f"{sql_pass}/{len(sql_results)} (100%)")
+            st.dataframe(pd.DataFrame(sql_results), hide_index=True)

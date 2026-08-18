@@ -15,119 +15,229 @@ from models import ExplainabilityAudit, QueryResult, DomainType
 
 CUSTOM_CSS = """
 <style>
-/* Enterprise Glassmorphic Theme */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* Universal Font & Base Polish */
+html, body, [class*="css"], .stMarkdown, .stText {
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.01em;
+}
+
+/* Executive Glassmorphic Hero Header */
 .main-header-container {
-    background: linear-gradient(135deg, #0d233a 0%, #1a365d 100%);
-    padding: 1.5rem 2rem;
-    border-radius: 14px;
-    color: white;
+    background: linear-gradient(135deg, #091e3a 0%, #102a4e 45%, #173865 100%);
+    padding: 1.75rem 2.25rem;
+    border-radius: 16px;
+    color: #ffffff;
     margin-bottom: 1.5rem;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+.main-header-container::after {
+    content: "";
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.25) 0%, rgba(0,0,0,0) 70%);
+    pointer-events: none;
 }
 .header-badge {
-    background: linear-gradient(90deg, #e53e3e, #dd6b20);
+    background: linear-gradient(90deg, #ef4444, #f97316);
     color: white;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 0.25rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.3rem 0.75rem;
     border-radius: 20px;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    display: inline-block;
-    margin-bottom: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 .domain-pill {
-    background-color: #2b6cb0;
-    color: #e2e8f0;
-    font-size: 0.8rem;
-    padding: 0.25rem 0.6rem;
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #e0e7ff;
+    font-size: 0.78rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 20px;
     font-weight: 600;
     display: inline-block;
     margin-left: 0.5rem;
 }
+.status-pill {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 20px;
+    font-weight: 600;
+    display: inline-block;
+    margin-left: 0.5rem;
+}
+
+/* Modern Segmented Pill Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 6px 8px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 1.25rem;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 10px;
+    padding: 8px 18px;
+    font-weight: 600;
+    font-size: 0.92rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #94a3b8;
+    border: none;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.38);
+}
+
+/* Glassmorphic Entity Cards */
 .entity-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1.25rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-    transition: all 0.2s ease-in-out;
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 1.35rem 1.5rem;
+    margin-bottom: 1.15rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    backdrop-filter: blur(12px);
 }
 .entity-card:hover {
-    border-color: #3182ce;
-    box-shadow: 0 6px 16px rgba(49, 130, 206, 0.12);
+    border-color: rgba(96, 165, 250, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(37, 99, 235, 0.2);
 }
 .entity-title {
     font-size: 1.25rem;
     font-weight: 700;
-    color: #1a202c;
-    margin-bottom: 0.2rem;
+    color: #f8fafc;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.02em;
 }
 .metric-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 0.5rem;
-    background: #f7fafc;
-    padding: 0.75rem;
-    border-radius: 8px;
-    margin-top: 0.5rem;
+    gap: 0.65rem;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    margin-top: 0.65rem;
 }
 .metric-item {
-    font-size: 0.85rem;
-    color: #4a5568;
+    font-size: 0.82rem;
+    color: #94a3b8;
 }
 .metric-val {
     font-weight: 700;
-    color: #2d3748;
+    color: #f1f5f9;
     font-size: 0.95rem;
 }
-.badge-livability-high {
-    background: #c6f6d5;
-    color: #22543d;
-    font-weight: 700;
-    padding: 0.25rem 0.6rem;
+
+/* Badges */
+.badge-avail-today {
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+    padding: 0.25rem 0.65rem;
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+.badge-avail-next {
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+.badge-specialty {
+    background: rgba(59, 130, 246, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.2rem 0.65rem;
+    border-radius: 6px;
+}
+.badge-livability-high {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+    font-weight: 700;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
 }
 .badge-livability-med {
-    background: #bee3f8;
-    color: #2b6cb0;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #93c5fd;
     font-weight: 700;
-    padding: 0.25rem 0.6rem;
+    padding: 0.25rem 0.65rem;
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
 }
 .badge-crime-safe {
-    background: #c6f6d5;
-    color: #22543d;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
     font-weight: 600;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
 }
 .badge-crime-mod {
-    background: #fefcbf;
-    color: #744210;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
     font-weight: 600;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
 }
 .badge-crime-high {
-    background: #fed7d7;
-    color: #9b2c2c;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
     font-weight: 600;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
 }
+
+/* Audit Panel */
 .audit-container {
-    background-color: #f8fafc;
-    border: 1px solid #cbd5e0;
-    border-left: 4px solid #3182ce;
-    border-radius: 8px;
-    padding: 1rem;
+    background-color: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 4px solid #3b82f6;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
     margin-top: 1rem;
     font-size: 0.9rem;
+    color: #cbd5e1;
 }
 </style>
 """
@@ -142,20 +252,23 @@ def render_header(domain: DomainType = DomainType.HEALTHCARE):
     """Renders the top hero banner with live status badges."""
     inject_custom_css()
     if domain == DomainType.HEALTHCARE:
-        title = "🏥 MedData AI"
-        subtitle = "Enterprise Clinical Triage, Doctor Discovery & Parameterized SQL Engine"
-        domain_label = "Active Domain: Clinical Health"
+        title = "🏥 MedData AI & Clinical Triage"
+        subtitle = "Zero-Hallucination Medical Directory, Physician Discovery & Parameterized Query Engine"
+        domain_label = "Clinical Health (India)"
     else:
-        title = "🏡 UrbanLocate AI"
-        subtitle = "Intelligent Real Estate & Neighborhood Livability Discovery Engine"
-        domain_label = "Active Domain: Real Estate & Livability"
+        title = "🏡 UrbanLocate AI & Livability Radar"
+        subtitle = "Intelligent Real Estate, School Scoring & Neighborhood Livability Discovery"
+        domain_label = "Real Estate & Livability (5 Metros)"
 
     st.markdown(textwrap.dedent(f"""
         <div class="main-header-container">
-            <span class="header-badge">Deterministic Grounding</span>
-            <span class="domain-pill">{domain_label}</span>
-            <h1 style="margin: 0.3rem 0; font-size: 2.1rem; color: #ffffff;">{title}</h1>
-            <p style="margin: 0; color: #cbd5e0; font-size: 1.05rem;">{subtitle}</p>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap;">
+                <span class="header-badge">🛡️ Zero-Hallucination Architecture</span>
+                <span class="status-pill">🟢 100% Database Grounded</span>
+                <span class="domain-pill">📍 {domain_label}</span>
+            </div>
+            <h1 style="margin: 0.2rem 0; font-size: 2.15rem; font-weight: 800; color: #ffffff; letter-spacing: -0.03em;">{title}</h1>
+            <p style="margin: 0; color: #cbd5e1; font-size: 1rem; font-weight: 500;">{subtitle}</p>
         </div>
     """), unsafe_allow_html=True)
 
@@ -181,7 +294,7 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
 
     for doc in doctors:
         is_avail = doc.get("is_available_today") == "Yes"
-        avail_badge = '<span style="color: #22543d; background-color: #c6f6d5; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">🟢 Available Today</span>' if is_avail else f'<span style="color: #744210; background-color: #fefcbf; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">📅 Next: {doc.get("next_available_date")}</span>'
+        avail_badge = '<span class="badge-avail-today">🟢 Available Today</span>' if is_avail else f'<span class="badge-avail-next">📅 Next: {doc.get("next_available_date")}</span>'
         fee_val = doc.get('consultation_fee', 0)
         fee_str = "FREE (₹0)" if fee_val == 0 else f"₹{fee_val:,}"
 
@@ -191,9 +304,9 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
                     <div class="entity-title">{doc.get('name')}</div>
                     <div>{avail_badge}</div>
                 </div>
-                <div style="margin: 0.2rem 0 0.5rem 0;">
-                    <span style="background-color: #ebf8ff; color: #2b6cb0; font-size: 0.8rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 6px;">{doc.get('specialty')}</span>
-                    <span style="color: #718096; font-size: 0.85rem; margin-left: 0.5rem;">• Surgery: <b>{doc.get('primary_surgery')}</b></span>
+                <div style="margin: 0.35rem 0 0.65rem 0; display: flex; align-items: center; gap: 8px;">
+                    <span class="badge-specialty">{doc.get('specialty')}</span>
+                    <span style="color: #94a3b8; font-size: 0.85rem;">• Surgery: <b style="color: #e2e8f0;">{doc.get('primary_surgery')}</b></span>
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item">⭐ Satisfaction: <span class="metric-val">{doc.get('satisfaction_score')}/100</span></div>
@@ -227,11 +340,11 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
         
         crime = p.get("crime_index_score", 20)
         if crime <= 12:
-            crime_badge = f'<span class="badge-crime-safe">🛡️ Ultra Safe & Gated ({crime}/100)</span>'
+            crime_badge = f'<span class="badge-crime-safe">🛡️ Ultra Safe ({crime}/100)</span>'
         elif crime <= 25:
-            crime_badge = f'<span class="badge-crime-mod">⚠️ Safe Neighborhood ({crime}/100)</span>'
+            crime_badge = f'<span class="badge-crime-mod">⚠️ Safe ({crime}/100)</span>'
         else:
-            crime_badge = f'<span class="badge-crime-high">🚨 Moderate Crime ({crime}/100)</span>'
+            crime_badge = f'<span class="badge-crime-high">🚨 Moderate ({crime}/100)</span>'
 
         rent_val = p.get('price_per_month', 0)
         card_html = textwrap.dedent(f"""
@@ -240,9 +353,9 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
                     <div class="entity-title">{p.get('title')}</div>
                     <div><span class="{liv_badge_class}">🏆 Livability: {livability}/100</span></div>
                 </div>
-                <div style="margin: 0.2rem 0 0.5rem 0;">
-                    <span style="background-color: #edf2f7; color: #2d3748; font-size: 0.8rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 6px;">📍 {p.get('neighborhood')}</span>
-                    <span style="color: #4a5568; font-size: 0.85rem; margin-left: 0.5rem;">• {p.get('property_type')} • <b>{p.get('bedrooms')} BHK / {p.get('bathrooms')} Bath</b> ({p.get('sqft')} sqft)</span>
+                <div style="margin: 0.35rem 0 0.65rem 0; display: flex; align-items: center; gap: 8px;">
+                    <span class="badge-specialty">📍 {p.get('neighborhood')}, {p.get('city', 'Bengaluru')}</span>
+                    <span style="color: #94a3b8; font-size: 0.85rem;">• {p.get('property_type')} • <b style="color: #e2e8f0;">{p.get('bedrooms')} BHK / {p.get('bathrooms')} Bath</b> ({p.get('sqft')} sqft)</span>
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item">💰 Rent: <span class="metric-val">₹{rent_val:,}/mo</span></div>
@@ -250,9 +363,9 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
                     <div class="metric-item">🏥 Hospital: <span class="metric-val">{p.get('hospital_dist_miles')} km</span></div>
                     <div class="metric-item">🚇 Metro Transit: <span class="metric-val">{p.get('transit_dist_miles')} km</span></div>
                 </div>
-                <div style="margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <div style="margin-top: 0.65rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>{crime_badge}</div>
-                    <div style="font-size: 0.8rem; color: #718096;">🛒 Shopping / High Street: <b>{p.get('market_dist_miles')} km</b></div>
+                    <div style="font-size: 0.8rem; color: #94a3b8;">🛒 High Street: <b style="color: #f1f5f9;">{p.get('market_dist_miles')} km</b></div>
                 </div>
             </div>
         """)
