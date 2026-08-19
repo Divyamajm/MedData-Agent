@@ -84,11 +84,7 @@ class TriageQueryRequest(BaseModel):
     engine: str = Field(
         default="deterministic", 
         json_schema_extra={"example": "deterministic"}, 
-        description="'deterministic' (<3ms regex) or 'llm' (Gemini/OpenAI) or 'auto'"
-    )
-    api_key: Optional[str] = Field(
-        default=None, 
-        description="Optional client-supplied API key; defaults to server environment variable"
+        description="'deterministic' (<1ms regex) or 'llm' (Gemini/OpenAI) or 'auto'"
     )
     provider: Optional[str] = Field(
         default="gemini", 
@@ -192,15 +188,18 @@ def process_triage_query(payload: TriageQueryRequest):
     """
     start_time = time.perf_counter()
     
-    # Resolve server-side key if not provided by client
-    resolved_api_key = payload.api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    # Resolve provider API key strictly from server environment variables
+    if payload.provider == "openai":
+        resolved_api_key = os.getenv("OPENAI_API_KEY")
+    else:
+        resolved_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
     # Intent extraction
     classification, engine_used, parse_lat = parse_user_intent_hybrid(
         payload.query,
         engine=payload.engine,
         api_key=resolved_api_key,
-        provider=payload.provider
+        provider=payload.provider or "gemini"
     )
 
     # Intercept Safety / Refusal Intents

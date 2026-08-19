@@ -7,3 +7,4 @@ uvicorn>=0.22.0
 requests>=2.28.0
 httpx>=0.24.0
 pytest>=7.0.0
+sqlglot>=20.0.0

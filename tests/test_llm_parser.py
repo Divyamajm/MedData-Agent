@@ -109,3 +109,49 @@ def test_sql_sandbox_blocks_unauthorized_tables():
     is_safe, decision = validate_sql_sandbox_query(unauthorized_query)
     assert is_safe is False
     assert "not in the sandbox allowlist" in decision or "Security Violation" in decision
+
+
+def test_sandbox_blocks_cte_wrapped_unauthorized_table():
+    """Adversarial security test: Verifies CTE-wrapped unauthorized table queries are blocked."""
+    query = "WITH x AS (SELECT 1) SELECT * FROM RandomTable;"
+    is_safe, decision = validate_sql_sandbox_query(query)
+    assert is_safe is False
+    assert "Security Violation" in decision or "RandomTable" in decision
+
+
+def test_sandbox_blocks_comma_join_unauthorized_table():
+    """Adversarial security test: Verifies comma-joined unauthorized table queries are blocked."""
+    query = "SELECT * FROM Doctors AS d, RandomTable AS r;"
+    is_safe, decision = validate_sql_sandbox_query(query)
+    assert is_safe is False
+    assert "Security Violation" in decision or "RandomTable" in decision
+
+
+def test_sandbox_blocks_multi_cte_unauthorized_table():
+    """Adversarial security test: Verifies multi-CTE unauthorized table queries are blocked."""
+    query = "WITH a AS (SELECT 1), b AS (SELECT * FROM RandomTable) SELECT * FROM a,b;"
+    is_safe, decision = validate_sql_sandbox_query(query)
+    assert is_safe is False
+    assert "Security Violation" in decision or "RandomTable" in decision
+
+
+def test_llm_parser_valid_json_wrong_schema_fallback():
+    """Verifies that valid JSON with an incorrect schema type degrades cleanly without crashing."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "candidates": [{
+            "content": {
+                "parts": [{"text": '{"intent": "doctor_search", "domain": "healthcare", "filters": "INVALID_STRING_NOT_DICT"}'}]
+            }
+        }]
+    }
+
+    with patch("requests.post", return_value=mock_resp):
+        res, latency, err = parse_intent_with_llm(
+            "Find a cardiologist in Chennai",
+            api_key="AIzaSyTestMockKey123",
+            provider="gemini"
+        )
+        # Should gracefully handle the invalid type without uncaught exception
+        assert res is not None or err is not None

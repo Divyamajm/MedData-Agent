@@ -327,13 +327,13 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
         return
 
     if len(properties) > 6:
-        st.markdown(f"### 📋 Verified Real Estate Database ({len(properties)} Properties)")
+        st.markdown(f"### 📋 Real Estate Directory ({len(properties)} Properties)")
         st.caption("Direct grounded tabular spreadsheet view across all 5 Indian Metros.")
         df = pd.DataFrame(properties)
         st.dataframe(df, height=480, hide_index=True)
         return
 
-    st.markdown(f"**Found {len(properties)} matching property record(s) with verified metrics:**")
+    st.markdown(f"**Found {len(properties)} matching property record(s) from database:**")
 
     for p in properties:
         livability = p.get("livability_score", 80)
@@ -604,7 +604,7 @@ def render_audit_trail(audit: ExplainabilityAudit):
     """Renders the Explainability Audit Trail dropdown panel."""
     with st.expander("🔍 Explainability & Query Provenance Audit Trail", expanded=False):
         st.markdown(f"**Domain:** `{audit.domain}` | **Interpreted Intent:** `{audit.intent}` (Confidence: `{audit.confidence * 100:.0f}%`)")
-        st.markdown(f"**Execution Latency:** `{audit.execution_time_ms} ms` | **Verified Rows Returned:** `{audit.result_count}`")
+        st.markdown(f"**Execution Latency:** `{audit.execution_time_ms} ms` | **Database Rows Returned:** `{audit.result_count}`")
         
         st.markdown("**Executed Parameterized SQL:**")
         st.code(audit.sql_query, language="sql")
@@ -683,7 +683,7 @@ def generate_html_report(
         <div class="audit-box">
             <h4>🔒 Query Provenance & Anti-Hallucination Audit</h4>
             <p><strong>Interpreted Intent:</strong> {audit_trail.intent} | <strong>Domain:</strong> {audit_trail.domain} | <strong>Execution Latency:</strong> {audit_trail.execution_time_ms} ms</p>
-            <p><strong>Verified SQL Query:</strong> <code>{audit_trail.sql_query}</code></p>
+            <p><strong>Parameterized SQL Query:</strong> <code>{audit_trail.sql_query}</code></p>
             <p><strong>Grounding Fidelity:</strong> 🟢 100% Deterministic (Zero AI Hallucination)</p>
         </div>
         """
@@ -820,7 +820,7 @@ def generate_html_report(
             </div>
         </div>
 
-        <h3>📊 Summary of Verified Records ({len(records)} items)</h3>
+        <h3>📊 Summary of Matching Records ({len(records)} items)</h3>
         {table_html}
 
         {audit_section}

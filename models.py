@@ -183,7 +183,7 @@ class HousingSearchFilters(BaseModel):
 
 
 class PropertyRecord(BaseModel):
-    """Database representation of a verified property / neighborhood record."""
+    """Database representation of a residential property / neighborhood record."""
     id: int
     title: str
     city: str = "Bengaluru"

@@ -286,7 +286,7 @@ def execute_housing_search(filters: HousingSearchFilters, db_path: str = DB_PATH
                 {"description": "Permit moderate crime index up to 40", "relaxed_filter": "max_crime_index"}
             ]
 
-        explanation = f"Found {row_count} verified property record(s) matching your livability criteria."
+        explanation = f"Found {row_count} matching property record(s) from database."
         if row_count == 0:
             explanation = "No properties in the database currently match all specified housing filters."
 

@@ -2,7 +2,7 @@
 MedData AI & UrbanLocate - Multi-Domain Discovery & Triage Platform (v1.1.0)
 Production Streamlit Application with Dual-Engine Intent Parsing,
 Interactive Geo-Spatial Maps, Appointment Conflict Scheduler, Side-by-Side Comparison Matrix,
-Insurance Estimator, Multi-Dataset Explorer, AST SQL Sandbox, and Scientific AI Benchmark.
+Insurance Estimator, Multi-Dataset Explorer, Token & Table Validated SQL Sandbox, and Reproducible AI Benchmark.
 """
 
 import os
@@ -61,7 +61,7 @@ if "messages" not in st.session_state:
             "role": "assistant",
             "content": (
                 "Namaste! I am the **MedData AI & UrbanLocate (India) Grounded Discovery Platform**.\n\n"
-                "I provide deterministic, database-grounded discovery across **Verified Indian Doctors** (Apollo, Fortis, Manipal), "
+                "I provide deterministic, database-grounded discovery across **Indian Clinical Specialists** (Apollo, Fortis, Manipal), "
                 "**Prime Indian Real Estate** (Bengaluru, Mumbai, Delhi-NCR, Hyderabad), and **Universal Custom Data Ingestion** with zero hallucinations.\n\n"
                 "💡 *Healthcare: 'Find a cardiologist in Bengaluru under ₹1000 available today'*\n"
                 "🏡 *Real Estate: 'Find a 3BHK flat in Indiranagar or Koramangala near metro under ₹50,000'*\n"
@@ -220,7 +220,7 @@ with tab_chat:
                         audit_trail=msg.get("audit")
                     )
                     st.download_button(
-                        label="📄 Export Verified Brief (Printable HTML / PDF)",
+                        label="📄 Export Executive Brief (Printable HTML / PDF)",
                         data=rep_html,
                         file_name=f"meddata_brief_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
                         mime="text/html",
@@ -280,7 +280,7 @@ with tab_chat:
             }
             st.rerun()
         elif parsed_result.intent == IntentType.GREETING:
-            greeting_msg = "Hello! I am ready to assist you. Ask for verified physicians, specialty procedures, or housing & neighborhood livability data."
+            greeting_msg = "Hello! I am ready to assist you. Ask for medical specialists, procedures, or housing & neighborhood livability data."
             st.session_state.messages.append({"role": "assistant", "content": greeting_msg, "type": "text"})
             st.rerun()
 
@@ -517,7 +517,7 @@ with tab_dynamic:
 # ==========================================
 with tab_patient:
     st.markdown("#### 🏥 Integrated Patient Concierge Services")
-    st.caption("Coordinate verified doctor appointments, prevent booking collisions, and estimate clinical insurance co-pays.")
+    st.caption("Coordinate clinical doctor appointments, prevent booking collisions, and estimate insurance co-pays.")
     
     subtab_sched, subtab_ins = st.tabs([
         "📅 Smart Appointment Booking & ICS Sync",
