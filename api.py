@@ -4,12 +4,14 @@ MedData AI -- Production FastAPI REST Service Layer
 Provides OpenAPI-documented REST endpoints for natural language clinical/housing discovery,
 intent extraction, SQL sandbox security validation, and automated AI evaluation benchmarks.
 
-Run via: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+Run via: python -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 """
 
+import os
 import time
+import uuid
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -28,7 +30,7 @@ init_database(force_reset=False)
 
 app = FastAPI(
     title="MedData AI & UrbanLocate REST API",
-    description="Deterministic Grounded Healthcare & Housing Discovery Engine with AST SQL Sandboxing & Bounded LLM Intent Parsing.",
+    description="Deterministic Grounded Healthcare & Housing Discovery Engine with Token-Validated SQL Sandboxing & Bounded LLM Intent Parsing.",
     version="1.0.0",
     contact={
         "name": "Divyam Sharma",
@@ -37,14 +39,36 @@ app = FastAPI(
     }
 )
 
-# Enable CORS for frontend clients (React / Vite / Next.js)
+# Standardized CORS Configuration (No wildcard with credentials)
+ALLOWED_ORIGINS = [
+    "http://localhost:8501",
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:8501",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:3000",
+    "https://meddata-divyam.streamlit.app"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# Structured Request ID & Timing Middleware
+@app.middleware("http")
+async def add_request_metadata(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    start_time = time.perf_counter()
+    response: Response = await call_next(request)
+    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Response-Time-MS"] = str(duration_ms)
+    return response
 
 
 # ==========================================
@@ -52,10 +76,24 @@ app.add_middleware(
 # ==========================================
 
 class TriageQueryRequest(BaseModel):
-    query: str = Field(..., example="Find a cardiologist in Chennai under ₹1500 available today", description="Natural language search query")
-    engine: str = Field(default="deterministic", example="deterministic", description="'deterministic' (<3ms regex) or 'llm' (Gemini/OpenAI) or 'auto'")
-    api_key: Optional[str] = Field(default=None, description="Optional LLM API Key for bounded LLM parsing")
-    provider: Optional[str] = Field(default="gemini", description="LLM provider ('gemini' or 'openai')")
+    query: str = Field(
+        ..., 
+        json_schema_extra={"example": "Find a cardiologist in Chennai under ₹1500 available today"}, 
+        description="Natural language search query"
+    )
+    engine: str = Field(
+        default="deterministic", 
+        json_schema_extra={"example": "deterministic"}, 
+        description="'deterministic' (<3ms regex) or 'llm' (Gemini/OpenAI) or 'auto'"
+    )
+    api_key: Optional[str] = Field(
+        default=None, 
+        description="Optional client-supplied API key; defaults to server environment variable"
+    )
+    provider: Optional[str] = Field(
+        default="gemini", 
+        description="LLM provider ('gemini' or 'openai')"
+    )
 
 
 class TriageQueryResponse(BaseModel):
@@ -75,7 +113,11 @@ class TriageQueryResponse(BaseModel):
 
 
 class SQLSandboxRequest(BaseModel):
-    sql: str = Field(..., example="SELECT name, specialty, consultation_fee FROM Doctors WHERE consultation_fee < 1000 ORDER BY consultation_fee ASC LIMIT 10;", description="SQL query to validate and execute in read-only sandbox")
+    sql: str = Field(
+        ..., 
+        json_schema_extra={"example": "SELECT name, specialty, consultation_fee FROM Doctors WHERE consultation_fee < 1000 ORDER BY consultation_fee ASC LIMIT 10;"}, 
+        description="SQL query to validate and execute in read-only sandbox"
+    )
 
 
 class SQLSandboxResponse(BaseModel):
@@ -85,6 +127,13 @@ class SQLSandboxResponse(BaseModel):
     columns: List[str]
     rows: List[Dict[str, Any]]
     execution_time_ms: float
+
+
+# Benchmark In-Memory Cache (Prevents CPU exhaustion DoS)
+_BENCHMARK_CACHE: Dict[str, Any] = {
+    "timestamp": 0.0,
+    "data": None
+}
 
 
 # ==========================================
@@ -98,6 +147,7 @@ def root():
         "version": "1.0.0",
         "author": "Divyam Sharma",
         "docs_url": "/docs",
+        "architecture": "Deterministic Grounded Intent Parser with Bounded LLM Fallback",
         "endpoints": {
             "query_triage": "POST /api/v1/triage/query",
             "sql_sandbox": "POST /api/v1/sandbox/sql",
@@ -109,7 +159,7 @@ def root():
 
 @app.get("/api/v1/health", tags=["General"])
 def health_check():
-    """Returns database connectivity and table record statistics."""
+    """Returns database connectivity, WAL mode status, and record counts."""
     try:
         conn = get_connection()
         c = conn.cursor()
@@ -117,33 +167,39 @@ def health_check():
         doc_count = c.fetchone()[0]
         c.execute("SELECT COUNT(*) FROM Properties;")
         prop_count = c.fetchone()[0]
+        c.execute("PRAGMA journal_mode;")
+        journal_mode = c.fetchone()[0]
         conn.close()
         return {
             "status": "healthy",
             "database": "SQLite (hospital_ultimate.db)",
+            "journal_mode": str(journal_mode).upper(),
             "doctors_count": doc_count,
             "properties_count": prop_count,
             "uptime": "100%"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database health check failed.")
 
 
 @app.post("/api/v1/triage/query", response_model=TriageQueryResponse, tags=["Discovery & Triage"])
 def process_triage_query(payload: TriageQueryRequest):
     """
     Executes the Dual-Engine Triage Pipeline:
-    1. Parses natural language intent (Deterministic AST or Bounded LLM)
+    1. Parses natural language intent (Deterministic Regex or Bounded LLM)
     2. Runs Safety Guardrails (Emergency, Prescription Refusal, Unknown Field, Prompt Injection)
     3. Executes Parameterized Read-Only SQL against ground-truth database
     """
     start_time = time.perf_counter()
     
+    # Resolve server-side key if not provided by client
+    resolved_api_key = payload.api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
     # Intent extraction
     classification, engine_used, parse_lat = parse_user_intent_hybrid(
         payload.query,
         engine=payload.engine,
-        api_key=payload.api_key,
+        api_key=resolved_api_key,
         provider=payload.provider
     )
 
@@ -222,9 +278,10 @@ def process_triage_query(payload: TriageQueryRequest):
 @app.post("/api/v1/sandbox/sql", response_model=SQLSandboxResponse, tags=["Security & Sandbox"])
 def execute_sql_sandbox(payload: SQLSandboxRequest):
     """
-    Validates an ad-hoc SQL query through the 2-layer tokenized sandbox:
-    - Layer 1: First-token allowlist (SELECT, WITH, EXPLAIN)
-    - Layer 2: DDL / Mutation blocklist (DROP, DELETE, UPDATE, INSERT, ALTER, PRAGMA)
+    Validates an ad-hoc SQL query through the 2-layer token and table sandbox:
+    - Layer 1: First-token allowlist (SELECT, WITH, EXPLAIN) + Mutation Blocklist
+    - Layer 2: Table allowlist (Doctors, Properties, Appointments, Specialties) + System Catalog Blocklist
+    - Execution Guardrail: Enforces max 100-row cap and instruction step limits to prevent DoS.
     """
     start_time = time.perf_counter()
     is_safe, decision = validate_sql_sandbox_query(payload.sql)
@@ -243,10 +300,23 @@ def execute_sql_sandbox(payload: SQLSandboxRequest):
     try:
         conn = get_connection()
         conn.row_factory = None
+        
+        # Guardrail: Prevent runaway CPU execution with progress handler (max 200,000 steps)
+        step_count = 0
+        def step_monitor():
+            nonlocal step_count
+            step_count += 1
+            if step_count > 1000:
+                return 1 # Abort query execution
+            return 0
+
+        conn.set_progress_handler(step_monitor, 200)
+
         c = conn.cursor()
         c.execute(payload.sql)
         columns = [desc[0] for desc in c.description] if c.description else []
-        raw_rows = c.fetchall()
+        # Enforce maximum 100 rows returned from sandbox
+        raw_rows = c.fetchmany(100)
         conn.close()
 
         dict_rows = [dict(zip(columns, r)) for r in raw_rows]
@@ -254,7 +324,7 @@ def execute_sql_sandbox(payload: SQLSandboxRequest):
 
         return SQLSandboxResponse(
             is_safe=True,
-            validation_decision="🛡️ SAFE READ-ONLY AST QUERY",
+            validation_decision="🛡️ SAFE READ-ONLY QUERY (Token & Table Validated)",
             row_count=len(dict_rows),
             columns=columns,
             rows=dict_rows,
@@ -262,22 +332,37 @@ def execute_sql_sandbox(payload: SQLSandboxRequest):
         )
     except Exception as e:
         lat = round((time.perf_counter() - start_time) * 1000, 2)
-        raise HTTPException(status_code=400, detail=f"SQL Execution Error: {str(e)}")
+        # Sanitize exception message so internal database paths/structures are not exposed
+        raise HTTPException(
+            status_code=400, 
+            detail="SQL execution failed. Please verify syntax, column names, and table references."
+        )
 
 
 @app.get("/api/v1/eval/benchmark", tags=["AI & Testing Benchmarks"])
-def get_evaluation_benchmark_metrics(engine: str = Query(default="deterministic", description="Engine to evaluate: 'deterministic' or 'llm'")):
+def get_evaluation_benchmark_metrics(
+    engine: str = Query(default="deterministic", description="Engine to evaluate: 'deterministic' or 'llm'"),
+    force_refresh: bool = Query(default=False, description="Bypass cache and recompute full 290-query benchmark")
+):
     """
-    Executes the 265-query scientific evaluation benchmark and returns
-    detailed precision, recall, accuracy, and latency distributions.
+    Returns the 290-query scientific evaluation benchmark metrics.
+    Includes in-memory caching to prevent resource exhaustion.
     """
+    global _BENCHMARK_CACHE
+    now = time.time()
+
+    # Cache benchmark result for 60 seconds unless forced
+    if not force_refresh and _BENCHMARK_CACHE["data"] is not None and (now - _BENCHMARK_CACHE["timestamp"]) < 60:
+        return _BENCHMARK_CACHE["data"]
+
     report = run_full_evaluation_benchmark(engine=engine)
-    return {
+    result = {
         "benchmark_summary": {
-            "total_queries": report.total_queries,
+            "total_queries": report.total_cases,
             "intent_accuracy_pct": report.intent_accuracy_pct,
             "entity_precision_pct": report.entity_precision_pct,
             "safety_refusal_precision_pct": report.safety_refusal_precision_pct,
+            "safety_refusal_recall_pct": report.safety_refusal_recall_pct,
             "ambiguity_interception_pct": report.ambiguity_interception_pct,
             "sql_execution_success_pct": report.sql_execution_success_pct,
             "latency_p50_ms": report.p50_latency_ms,
@@ -288,3 +373,7 @@ def get_evaluation_benchmark_metrics(engine: str = Query(default="deterministic"
         "category_summary": report.category_summary,
         "sample_detailed_cases": report.detailed_results[:10]
     }
+
+    _BENCHMARK_CACHE["timestamp"] = now
+    _BENCHMARK_CACHE["data"] = result
+    return result

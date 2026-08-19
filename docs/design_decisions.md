@@ -7,10 +7,10 @@
 
 ---
 
-## 2. Why Dual-Engine (Deterministic AST + Bounded LLM)?
-- **Problem**: LLM API calls take `300ms–700ms` and require internet/API keys. Pure regex parsers can struggle with complex conversational grammar.
-- **Decision**: Implement a Dual-Engine architecture with deterministic regex as default (`<0.3ms` latency) and LLM as conversational enhancer.
-- **Benefit**: Provides 100% offline uptime, sub-millisecond query compilation, and zero API costs for standard discovery.
+## 2. Why Dual-Engine (Deterministic Rule Engine + Bounded LLM)?
+- **Problem**: LLM API calls take `300ms–1500ms` of network latency and require internet/API keys. Pure regex parsers can struggle with complex conversational grammar.
+- **Decision**: Implement a Dual-Engine architecture with a deterministic regex/token parser as default (`<0.2ms` local compilation latency) and bounded LLM as conversational enhancer.
+- **Benefit**: Provides 100% offline uptime, sub-millisecond local query compilation, and zero API costs for standard discovery.
 
 ---
 

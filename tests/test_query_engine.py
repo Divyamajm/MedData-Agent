@@ -2,7 +2,7 @@
 Pytest Suite for Parameterized Query Engine & SQL Sandbox
 =========================================================
 Tests SQL compilation safety, parameterized execution,
-and AST mutation blocklists (DROP, DELETE, UPDATE, INSERT, ALTER).
+and SQL mutation blocklists (DROP, DELETE, UPDATE, INSERT, ALTER).
 """
 
 import pytest

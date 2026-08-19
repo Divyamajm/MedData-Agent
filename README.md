@@ -7,7 +7,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com)
 [![Docker Ready](https://img.shields.io/badge/Docker-Containerized-2496ED.svg?logo=docker)](Dockerfile)
-[![Pytest Passed](https://img.shields.io/badge/pytest-45%20passed-success.svg)](https://pytest.org)
+[![Pytest Passed](https://img.shields.io/badge/pytest-52%20passed-success.svg)](https://pytest.org)
 
 **Architected & Developed by:** [Divyam Sharma](https://github.com/Divyamajm) (*B.Tech CSE, Vellore Institute of Technology, Chennai*)  
 **Live Cloud Deployment:** [https://meddata-divyam.streamlit.app/](https://meddata-divyam.streamlit.app/)
@@ -20,10 +20,10 @@ In high-stakes clinical and real estate discovery, allowing an unconstrained LLM
 
 **MedData AI** implements a **strict separation of concerns**:
 1. **Input Boundary**: Natural language queries are parsed into structured filter objects conforming to a strict **Pydantic v2 Schema**.
-   - **Dual-Engine Triage**: Supports sub-millisecond deterministic regex/dictionary classification (`<0.2ms` latency) or bounded LLM function calling (**Google Gemini / OpenAI** structured JSON).
+   - **Dual-Engine Triage**: Supports sub-millisecond deterministic regex/dictionary classification (`<0.2ms` compilation latency) or bounded LLM function calling (**Google Gemini / OpenAI** structured JSON).
 2. **Safety & Guardrails Layer**: Programmatically intercepts acute emergencies (triggering 112/911 redirection), blocks clinical diagnosis/prescription attempts, identifies untracked schema attributes (zero guessing), and filters prompt injections.
 3. **Deterministic Query Compiler**: Converts validated Pydantic models into parameterized SQL queries with strict column allowlists (`ALLOWED_DOCTOR_COLUMNS`, `ALLOWED_SORT_METRICS`). **The LLM never touches, writes, or executes SQL.**
-4. **2-Layer Read-Only SQL Token & AST Validation Sandbox**: Sandboxed query execution engine with first-token allowlists (`SELECT`, `WITH`, `EXPLAIN`) and DDL/mutation blocklists (`DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `PRAGMA`).
+4. **2-Layer Read-Only SQL Security Sandbox**: Sandboxed query execution engine with first-token allowlists (`SELECT`, `WITH`, `EXPLAIN`), table allowlists (`Doctors`, `Properties`, `Appointments`, `Specialties`), catalog protection (`sqlite_master` blocking), and execution DoS caps.
 
 ```
                               ┌────────────────────────────────────────┐
@@ -34,7 +34,7 @@ In high-stakes clinical and real estate discovery, allowing an unconstrained LLM
                               ┌────────────────────────────────────────┐
                               │        DUAL-ENGINE INTENT PARSER       │
                               │  ┌──────────────────┐ ┌──────────────┐ │
-                              │  │ Deterministic AST│ │ Bounded LLM  │ │
+                              │  │Deterministic Rule│ │ Bounded LLM  │ │
                               │  │  Regex (<0.2ms)  │ │ (Structured) │ │
                               │  └──────────────────┘ └──────────────┘ │
                               └──────────────────┬─────────────────────┘
@@ -63,7 +63,7 @@ In high-stakes clinical and real estate discovery, allowing an unconstrained LLM
                                                  ▼
                               ┌────────────────────────────────────────┐
                               │     SQLite / PostgreSQL DATA LAKE      │
-                              │  (200 Indian Doctors & 50 Properties)  │
+                              │  (200 Specialists & 50 Properties)     │
                               └──────────────────┬─────────────────────┘
                                                  │
                                                  ▼
@@ -87,16 +87,16 @@ The repository includes an empirical scientific evaluation suite (`python -m tes
 | **Clinical Safety Refusal Recall** | **89.5%** | Proportion of dangerous queries successfully caught and redirected. |
 | **Ambiguity Interception Rate** | **98.3%** | Intercepting subjective queries (*"best doctor"*, *"top hospital"*) for metric clarification. |
 | **SQL Execution & Grounding Rate** | **100.0%** | Zero SQL syntax errors, 100% database grounding with no fabricated rows. |
-| **Deterministic Pipeline Latency** | **0.15 ms** | Mean execution latency of deterministic AST compiler (`p50: 0.14ms`, `p95: 0.42ms`, `p99: 1.57ms`). *(Excludes external cloud LLM API network roundtrips)*. |
+| **Deterministic Pipeline Latency** | **0.15 ms** | Mean execution latency of deterministic compiler on local RAM (`p50: 0.14ms`, `p95: 0.42ms`, `p99: 1.57ms`). *(Excludes external cloud LLM API network roundtrips)*. |
 
 ---
 
 ## 🚀 Key Platform Features
 
 1. **🏥 Indian Super-Specialty Clinical Discovery**:
-   - 200 curated realistic records modeled on Indian healthcare directory schemas across 10 specialties (Cardiology, Neurology, Orthopedics, Pediatrics, Oncology, ENT, Gynecology, Dermatology, Psychiatry, General Medicine) in top hospital networks (Apollo, Fortis, Max, Manipal, AIIMS).
+   - 200 procedurally generated synthetic specialist records modeled on Indian healthcare directory schemas across 10 specialties (Cardiology, Neurology, Orthopedics, Pediatrics, Oncology, ENT, Gynecology, Dermatology, Psychiatry, General Medicine) in top hospital networks (Apollo, Fortis, Max, Manipal, AIIMS).
 2. **🏠 UrbanLocate Real Estate Discovery**:
-   - 50 curated synthetic residential property records across 5 Indian Metros (Bengaluru, Mumbai, Delhi-NCR, Chennai, Hyderabad) with crime safety indexes, school ratings, and transit proximity.
+   - 50 procedurally generated synthetic residential property records across 5 Indian Metros (Bengaluru, Mumbai, Delhi-NCR, Chennai, Hyderabad) with crime safety indexes, school ratings, and transit proximity.
 3. **📂 Dynamic CSV Auto-Analyzer**:
    - Zero-shot dataset ingestion: Upload any arbitrary CSV spreadsheet to automatically profile data types, calculate statistical distributions, and execute natural language filtering.
 4. **🎙️ Native Web Speech API Voice Dictation**:
@@ -104,7 +104,7 @@ The repository includes an empirical scientific evaluation suite (`python -m tes
 5. **📄 1-Click Executive PDF / HTML Brief Export**:
    - Generates clean, printable A4 clinical reports with anti-hallucination timestamps and query execution watermarks.
 6. **🔒 Read-Only SQL Security Sandbox**:
-   - Interactive SQL editor allowing safe ad-hoc querying while blocking all mutation and DDL injection attempts.
+   - Interactive SQL editor allowing safe ad-hoc querying with table allowlisting and DoS protection while blocking all mutation and DDL injection attempts.
 7. **📅 Conflict-Free Appointment Booking**:
    - Relational appointment scheduling with double-booking collision prevention and RFC 5545 `.ics` Apple/Google Calendar export.
 
@@ -121,13 +121,13 @@ python -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 
 ### API Endpoints:
 - `POST /api/v1/triage/query`: Natural language triage and structured search.
-- `POST /api/v1/sandbox/sql`: 2-layer token-validated read-only SQL execution.
-- `GET /api/v1/eval/benchmark`: Live scientific evaluation benchmark execution.
-- `GET /api/v1/health`: Health status and database row statistics.
+- `POST /api/v1/sandbox/sql`: 2-layer token and table validated read-only SQL execution.
+- `GET /api/v1/eval/benchmark`: Cached scientific evaluation benchmark metrics.
+- `GET /api/v1/health`: Health status, WAL journal mode status, and database row statistics.
 
 ---
 
-## 🐳 Docker Production Deployment
+## 🐳 Docker Containerized Deployment
 
 Run both the Streamlit frontend (`:8501`) and FastAPI backend (`:8000`) simultaneously via Docker Compose:
 
@@ -142,8 +142,8 @@ docker compose up --build
 The project provides three testing and evaluation suites:
 
 ```bash
-# 1. Run standard Pytest across all test suites (45/45 Passed in ~1.0s):
-pytest -v
+# 1. Run standard Pytest across all test suites (52/52 Passed in ~1.2s):
+python -m pytest -v
 
 # 2. Run Core 32-Case Verification Suite & SQL Sandbox Tests (100% Pass):
 python -m tests.test_suite
@@ -156,7 +156,7 @@ python -m tests.eval_benchmark
 
 ## 📚 Technical Documentation & System Specifications
 - **[Architecture Specification](docs/architecture.md)**: Deep dive into the Grounding Layer, IntentRouter, SafetyGate, and QueryCompiler.
-- **[Security & Threat Model](docs/security_and_threat_model.md)**: SQL sandbox token rules, prompt injection defense, and emergency routing.
+- **[Security & Threat Model](docs/security_and_threat_model.md)**: SQL sandbox token & table allowlist rules, prompt injection defense, and emergency routing.
 - **[Evaluation Methodology](docs/evaluation_methodology.md)**: Benchmark dataset composition (290 queries) and statistical metrics.
 - **[Design Decisions & Tradeoffs](docs/design_decisions.md)**: Why bounded LLMs, deterministic fallbacks, and Pydantic v2 schemas.
 

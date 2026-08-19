@@ -147,9 +147,9 @@ def execute_doctor_search(filters: SearchFilters, db_path: str = DB_PATH) -> Que
         if row_count == 0:
             relaxation_suggestions = generate_relaxation_suggestions(filters, db_path)
 
-        explanation = f"Found {row_count} verified doctor(s) matching your constraints."
+        explanation = f"Found {row_count} matching specialist(s) from the database."
         if row_count == 0:
-            explanation = "No doctors in the database currently match all specified filters."
+            explanation = "No specialists in the database currently match all specified filters."
 
         return QueryResult(
             success=True,

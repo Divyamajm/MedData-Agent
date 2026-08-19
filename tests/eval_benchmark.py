@@ -9,7 +9,7 @@ Evaluates the Grounded AI Agent across 9 critical dimensions:
 5. Acute Emergency Protocol Trigger Accuracy (%)
 6. Unknown Attribute Zero-Hallucination Refusal Rate (%)
 7. Security & Prompt Injection Defense Rate (%)
-8. Deterministic AST Parameterized SQL Generation Rate (%)
+8. Deterministic Parameterized SQL Generation Rate (%)
 9. End-to-End Latency Profiling (p50, p95, p99, Mean)
 """
 

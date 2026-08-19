@@ -180,11 +180,23 @@ def check_prompt_injection(prompt: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+# Allowed tables for ad-hoc read-only SQL querying
+ALLOWED_SANDBOX_TABLES = {"DOCTORS", "PROPERTIES", "APPOINTMENTS", "SPECIALTIES"}
+
+# Forbidden system tables to prevent internal schema leaks
+FORBIDDEN_SYSTEM_TABLES = {
+    "SQLITE_MASTER", "SQLITE_SCHEMA", "SQLITE_TEMP_MASTER", "SQLITE_TEMP_SCHEMA",
+    "SQLITE_SEQUENCE", "SQLITE_STAT1", "SQLITE_STAT2", "SQLITE_STAT3", "SQLITE_STAT4",
+    "INFORMATION_SCHEMA", "PG_CATALOG", "PG_TABLES", "SYS", "MYSQL"
+}
+
+
 def validate_sql_sandbox_query(query: str) -> Tuple[bool, str]:
     """
     Validates custom SQL queries for the live SQL Sandbox.
     Enforces strict read-only execution (SELECT / WITH CTE only).
-    Rejects any mutation, DDL, or administrative commands across all tables.
+    Rejects any mutation, DDL, administrative commands, system catalog reads,
+    and recursive CTE resource-exhaustion vectors.
     """
     if not query or not query.strip():
         return False, "Query cannot be empty."
@@ -209,17 +221,34 @@ def validate_sql_sandbox_query(query: str) -> Tuple[bool, str]:
     # 1. First token MUST be SELECT, WITH, or EXPLAIN
     allowed_start_tokens = {"SELECT", "WITH", "EXPLAIN"}
     if tokens[0] not in allowed_start_tokens:
-        return False, f"Security Violation: Sandbox only allows read-only SELECT or WITH statements. Statement starts with '{tokens[0]}'."
+        return False, f"Security Violation: Sandbox only allows read-only SELECT, WITH, or EXPLAIN statements. Statement starts with '{tokens[0]}'."
 
-    # 2. Block all DDL, DML mutations and PRAGMA calls
+    # 2. Block all DDL, DML mutations, PRAGMA calls, and recursive CTEs (DoS prevention)
     forbidden_tokens = {
         "DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "TRUNCATE",
         "RENAME", "CREATE", "REPLACE", "ATTACH", "DETACH", "PRAGMA",
-        "VACUUM", "REINDEX", "EXEC", "EXECUTE"
+        "VACUUM", "REINDEX", "EXEC", "EXECUTE", "RECURSIVE"
     }
 
     for token in tokens:
         if token in forbidden_tokens:
-            return False, f"Security Violation: Mutation or administrative command '{token}' is forbidden in the read-only sandbox."
+            return False, f"Security Violation: Command or modifier '{token}' is forbidden in the read-only sandbox."
 
-    return True, "Query passed read-only security token validation."
+    # 3. Block access to system metadata / catalog tables (Schema Disclosure Prevention)
+    for token in tokens:
+        if token in FORBIDDEN_SYSTEM_TABLES:
+            return False, f"Security Violation: Access to internal system catalog table '{token}' is restricted."
+
+    # 4. Validate that referenced tables in FROM and JOIN belong to allowed tables or CTE aliases
+    # Extract table names following FROM or JOIN
+    table_matches = re.findall(r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_]*)", first_stmt, flags=re.IGNORECASE)
+    for tbl in table_matches:
+        tbl_upper = tbl.upper()
+        if tbl_upper in FORBIDDEN_SYSTEM_TABLES:
+            return False, f"Security Violation: Access to system table '{tbl}' is forbidden."
+        # If not an allowed table, verify it's not a forbidden table
+        if tbl_upper not in ALLOWED_SANDBOX_TABLES and not tokens[0] == "WITH":
+            # For non-WITH queries, only allowed tables are permitted
+            return False, f"Security Violation: Table '{tbl}' is not in the sandbox allowlist ({', '.join(sorted(ALLOWED_SANDBOX_TABLES))})."
+
+    return True, "Query passed read-only security token and table allowlist validation."

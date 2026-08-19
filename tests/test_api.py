@@ -59,4 +59,25 @@ def test_sql_sandbox_endpoint_blocked_query():
     assert response.status_code == 200
     data = response.json()
     assert data["is_safe"] is False
-    assert "BLOCKED" in data["validation_decision"].upper() or "MUTATION" in data["validation_decision"].upper()
+    assert "BLOCKED" in data["validation_decision"]
+
+
+@pytest.mark.api
+def test_sql_sandbox_endpoint_blocks_sqlite_master():
+    payload = {
+        "sql": "SELECT sql FROM sqlite_master WHERE type='table';"
+    }
+    response = client.post("/api/v1/sandbox/sql", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_safe"] is False
+    assert "Security Violation" in data["validation_decision"] or "BLOCKED" in data["validation_decision"]
+
+
+@pytest.mark.api
+def test_benchmark_endpoint_cached():
+    response = client.get("/api/v1/eval/benchmark")
+    assert response.status_code == 200
+    data = response.json()
+    assert "benchmark_summary" in data
+    assert data["benchmark_summary"]["total_queries"] == 290

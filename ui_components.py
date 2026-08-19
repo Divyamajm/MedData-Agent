@@ -275,15 +275,15 @@ def render_header(domain: DomainType = DomainType.HEALTHCARE):
 
 
 def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool = True):
-    """Renders verified doctor records with clean spreadsheet dataframe when all data/directory is requested."""
+    """Renders specialist doctor records with clean spreadsheet dataframe when all data/directory is requested."""
     if not doctors:
-        st.info("No matching doctors found.")
+        st.info("No matching specialists found.")
         return
 
     # If full directory / large result set (> 5 records), render direct interactive spreadsheet table
     if len(doctors) > 5:
-        st.markdown(f"### 📋 Verified Doctors Database ({len(doctors)} Records)")
-        st.caption("Direct grounded tabular spreadsheet view of all matching doctors.")
+        st.markdown(f"### 📋 Clinical Specialists Directory ({len(doctors)} Records)")
+        st.caption("Direct grounded tabular spreadsheet view of matching medical specialists.")
         df = pd.DataFrame(doctors)
         display_cols = [c for c in ["id", "name", "specialty", "consultation_fee", "primary_surgery", "surgery_success_rate", "satisfaction_score", "distance_miles", "is_available_today", "next_available_date"] if c in df.columns]
         if display_cols:
@@ -291,7 +291,7 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
         st.dataframe(df, height=480, hide_index=True)
         return
 
-    st.markdown(f"**Found {len(doctors)} matching doctor(s) from the verified database:**")
+    st.markdown(f"**Found {len(doctors)} matching specialist(s) from the database:**")
 
     for doc in doctors:
         is_avail = doc.get("is_available_today") == "Yes"
@@ -828,7 +828,7 @@ def generate_html_report(
 
         <div class="footer">
             <div>MedData AI & UrbanLocate • Confidential Executive Report</div>
-            <div>Zero-Hallucination Disambiguation & AST SQL Grounding</div>
+            <div>Database-Grounded Disambiguation & Parameterized SQL Execution</div>
         </div>
     </div>
 </body>

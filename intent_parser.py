@@ -586,4 +586,4 @@ def parse_user_intent_hybrid(
     # Default Deterministic Engine
     det_res = classify_intent_and_extract_entities(prompt)
     latency = (time.perf_counter() - start) * 1000
-    return det_res, "Deterministic AST (<3ms)", latency
+    return det_res, "Deterministic Rule Engine (<1ms)", latency

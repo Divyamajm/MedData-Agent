@@ -1,29 +1,50 @@
-build
-**.egg-info
-venn
-.DS_Store
-tests/__pycache__
+# Python artifacts
 __pycache__/
-.idea
-.coverage
-docs/*.html
-.ipynb_checkpoints/
-.tox/
-notebooks/chroma.sqlite3
-dist
-.env
-*.sqlite
-*.db
-htmlcov
-chroma.sqlite3
-*.bin
-.coverage.*
-milvus.db
-.milvus.db.lock
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Frontend builds and dependencies
-frontends/**/node_modules/
-frontends/**/static/
-frontends/**/.storybook-static/
-frontends/**/package-lock.json
-frontends/**/.mypy_cache/
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Local SQLite databases (seeded automatically on startup)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables & secrets
+.env
+.env.local
+
+# IDE & OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

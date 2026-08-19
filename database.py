@@ -185,8 +185,11 @@ def calculate_livability_score(crime_index: int, school_rating: float, hospital_
 
 
 def get_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
-    """Returns a SQLite connection configured with Row factory."""
+    """Returns a SQLite connection configured with Row factory and WAL journal mode."""
     conn = sqlite3.connect(db_path, timeout=10.0, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
     return conn
 

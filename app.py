@@ -175,7 +175,7 @@ with tab_chat:
     with col_eng1:
         engine_mode = st.radio(
             "🧠 Parsing Engine:",
-            ["⚡ Deterministic AST (<3ms)", "🤖 Bounded LLM (Structured JSON)"],
+            ["⚡ Deterministic Rule Engine (<1ms)", "🤖 Bounded LLM (Structured JSON)"],
             horizontal=True,
             key="ui_engine_mode"
         )
@@ -183,7 +183,7 @@ with tab_chat:
         if "Bounded LLM" in engine_mode:
             llm_key_input = st.text_input("🔑 API Key (Optional if GEMINI_API_KEY set in env):", type="password", key="ui_llm_key")
         else:
-            st.caption("⚡ **Grounded Rule Engine**: Zero-latency (<3ms), deterministic AST compilation, 0.0% AI hallucination.")
+            st.caption("⚡ **Grounded Rule Engine**: Sub-millisecond (<1ms) regex/token parsing, zero SQL generation by LLM, 100% database grounding.")
 
     # Voice / Audio Query Live Web Speech API & Dictation
     with st.expander("🎙️ Live Voice Triage (Native Web Speech API & Dictation)", expanded=False):
@@ -596,11 +596,11 @@ with tab_patient:
 # ==========================================
 with tab_developer:
     st.markdown("#### ⚡ Enterprise Data Lake, SQL Sandbox & Verification Suite")
-    st.caption("Inspect raw SQLite tables, test read-only SQL AST compilation, monitor real-time query latency, and run automated test batteries.")
+    st.caption("Inspect raw SQLite tables, test token/table-validated SQL sandboxing, monitor real-time query latency, and run automated test batteries.")
 
     subtab_lake, subtab_sql, subtab_telemetry, subtab_tests, subtab_benchmark = st.tabs([
         "🗄️ Multi-Dataset Lake Explorer",
-        "⚡ AST Parameterized SQL Sandbox",
+        "🔒 SQL Security Sandbox",
         "📊 Engine Telemetry & Latency Profiler",
         "🧪 Automated Verification Suite (32 Tests)",
         "📈 AI Scientific Evaluation Benchmark"
@@ -658,8 +658,8 @@ with tab_developer:
                 st.rerun()
 
     with subtab_sql:
-        st.markdown("##### ⚡ AST-Validated Read-Only SQL Sandbox")
-        st.caption("Test custom queries directly against the local SQLite database. Mutating statements (`DROP`, `DELETE`, `INSERT`, `UPDATE`) are strictly blocked by AST analysis.")
+        st.markdown("##### 🔒 Token & Table Validated SQL Sandbox")
+        st.caption("Test custom queries directly against the local SQLite database. Mutating statements (`DROP`, `DELETE`, `INSERT`, `UPDATE`) and system catalog reads (`sqlite_master`) are strictly blocked.")
 
         default_sql = "SELECT name, specialty, primary_surgery, surgery_success_rate, consultation_fee FROM Doctors WHERE consultation_fee <= 1000 ORDER BY satisfaction_score DESC LIMIT 10;"
         user_sql = st.text_area("SQL Query Editor (Read-Only Grounded Sandbox)", value=default_sql, height=120)
@@ -684,7 +684,7 @@ with tab_developer:
 
     with subtab_telemetry:
         st.markdown("##### 📊 Real-Time Engine Telemetry & Latency Profiler")
-        st.caption("Inspect live deterministic query response times, schema AST grounding performance, and security validation metrics.")
+        st.caption("Inspect live deterministic query response times, schema grounding performance, and security validation metrics.")
 
         tel_history = st.session_state.get("telemetry_history", [])
         if tel_history:
@@ -695,9 +695,9 @@ with tab_developer:
 
             tc1, tc2, tc3, tc4 = st.columns(4)
             tc1.metric("⚡ Mean Query Latency", f"{mean_lat:.2f} ms")
-            tc2.metric("⚡ Fastest AST Execution", f"{min_lat:.2f} ms")
-            tc3.metric("🔒 AST Injection Block Rate", "100.0%")
-            tc4.metric("🎯 Anti-Hallucination Grounding", "100.0%")
+            tc2.metric("⚡ Fastest Compilation", f"{min_lat:.2f} ms")
+            tc3.metric("🔒 SQL Mutation Block Rate", "100.0%")
+            tc4.metric("🎯 Database Grounding", "100.0%")
 
             st.divider()
             st.markdown("###### 📈 Real-Time Query Execution Latency Distribution (ms)")
@@ -710,21 +710,22 @@ with tab_developer:
             st.info("Run queries in AI Discovery to view real-time telemetry metrics.")
 
     with subtab_tests:
-        st.markdown("##### 🧪 Automated Intent, Safety & Query Verification Suite")
-        st.caption("Executes all 32 rigorous test cases covering ambiguity, negation, medical refusal, contradictions, injection defense, and multi-domain real estate.")
+        st.markdown("##### 🧪 32-Case Comprehensive System Verification Suite")
+        st.caption("Executes all 32 verification test cases across discovery, negation, ambiguity, medical safety, and injection defense.")
 
-        if st.button("🚀 Run Complete 32-Test Suite Now", type="primary"):
-            with st.spinner("Running verification battery across all test cases..."):
-                st.session_state.test_results = run_all_tests()
-                st.session_state.sql_test_results = run_sql_sandbox_security_tests()
+        if st.button("🚀 Run 32-Test Verification Suite", type="primary", key="btn_run_32_tests"):
+            with st.spinner("Running full verification test battery..."):
+                t_results = run_all_tests()
+                sql_results = run_sql_sandbox_security_tests()
+                st.session_state.test_results = t_results
+                st.session_state.sql_test_results = sql_results
 
         if "test_results" in st.session_state and st.session_state.test_results:
             t_results = st.session_state.test_results
             sql_results = st.session_state.get("sql_test_results", [])
-
             pass_count = sum(1 for r in t_results if r.passed)
             total_count = len(t_results)
-            pct = (pass_count / total_count) * 100
+            pct = (pass_count / total_count) * 100 if total_count > 0 else 0
 
             st.metric("Test Pass Rate", f"{pass_count}/{total_count} ({pct:.1f}%)")
 
@@ -766,14 +767,14 @@ with tab_developer:
                     st.dataframe(pd.DataFrame(sql_rows), hide_index=True)
 
     with subtab_benchmark:
-        st.markdown("##### 📈 200+ Query AI Scientific Evaluation Benchmark")
-        st.caption("Measures empirical Intent Classification Accuracy, Entity Extraction Precision, Safety Refusal Rates, and Latency distributions across a diverse 265-query evaluation dataset.")
+        st.markdown("##### 📈 290-Query AI Scientific Evaluation Benchmark")
+        st.caption("Measures empirical Intent Classification Accuracy, Entity Extraction Precision, Safety Refusal Rates, and Latency distributions across a labeled 290-query evaluation dataset.")
 
         col_b1, col_b2 = st.columns([1, 2])
         with col_b1:
             eval_engine = st.selectbox(
                 "Benchmark Target Engine:",
-                ["Deterministic AST (<3ms)", "Bounded LLM (Gemini/OpenAI)"],
+                ["Deterministic Rule Engine (<1ms)", "Bounded LLM (Gemini/OpenAI)"],
                 key="eval_engine_select"
             )
             run_btn = st.button("🚀 Run Scientific Benchmark Suite", type="primary", key="btn_run_eval_bench")

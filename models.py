@@ -127,7 +127,7 @@ class SearchFilters(BaseModel):
 
 
 class DoctorRecord(BaseModel):
-    """Database representation of a verified Doctor record with geo-coordinates."""
+    """Database representation of a Doctor specialist record with geo-coordinates."""
     id: int
     name: str
     specialty: str

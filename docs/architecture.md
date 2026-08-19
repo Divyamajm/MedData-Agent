@@ -30,9 +30,9 @@
            [ DUAL-ENGINE INTENT ROUTER ]
           ┌────────────────┴────────────────┐
           ▼                                 ▼
-   Deterministic AST                   Bounded LLM
-      Regex Engine                  Structured Parser
-   (Latency < 0.3ms)                (Gemini / OpenAI)
+   Deterministic Rule                 Bounded LLM
+      Regex Engine                 Structured Parser
+   (Latency < 0.2ms)               (Gemini / OpenAI)
           │                                 │
           └────────────────┬────────────────┘
                            │
@@ -44,19 +44,21 @@
                            │
                            ▼
              [ PARAMETERIZED QUERY COMPILER ]
-             ├── Whitelist column validation
+             ├── Allowlist column validation
              ├── SQL placeholder binding (? / :val)
              └── Zero string-concatenation guarantee
                            │
                            ▼
-             [ 2-LAYER AST SQL SANDBOX ]
-             ├── Tokenized statement validator
+             [ READ-ONLY SQL SECURITY SANDBOX ]
+             ├── First-token allowlist (SELECT, WITH, EXPLAIN)
+             ├── Table allowlist (Doctors, Properties, Appointments)
+             ├── Catalog blocklist (sqlite_master) & DoS caps
              └── Mutation / DDL blocklist
                            │
                            ▼
              [ SQLITE / DATA LAKE STORAGE ]
-             ├── 200 Verified Indian Doctors
-             ├── 50 UrbanLocate Properties
+             ├── 200 Synthetic Indian Specialist Records (WAL Mode)
+             ├── 50 Synthetic UrbanLocate Property Records
              └── Real-Time ACID Appointments
                            │
                            ▼
@@ -76,15 +78,16 @@ Intercepts queries before any parsing or database execution occurs:
 - **Prompt Injection Defense**: Intercepts jailbreak prompts, system-prompt extraction attempts, and raw SQL injection keywords.
 
 ### 2. Dual-Engine Intent Router (`intent_parser.py` & `llm_parser.py`)
-- **Deterministic AST Engine**: Sub-millisecond rule-based parser utilizing regex pattern extractors and specialty synonym dictionaries.
+- **Deterministic Rule Engine**: Sub-millisecond rule-based parser utilizing regex pattern extractors and specialty synonym dictionaries (`~0.15ms` local RAM latency).
 - **Bounded LLM Engine**: Employs Google Gemini (`gemini-2.0-flash`) or OpenAI with structured JSON Schema output mode.
 
 ### 3. Parameterized Query Compiler (`query_engine.py`)
 Converts validated `SearchFilters` into secure parameterized SQL:
 - Uses strictly allowlisted column sets (`ALLOWED_DOCTOR_COLUMNS`, `ALLOWED_SORT_METRICS`).
-- Values are bound through SQLite parameter placeholders (`?`), preventing second-order SQL injections.
+- Values are bound through SQLite parameter placeholders (`?`), preventing SQL injections.
 
-### 4. 2-Layer AST SQL Sandbox (`safety.py` & `api.py`)
+### 4. Read-Only SQL Security Sandbox (`safety.py` & `api.py`)
 Protects ad-hoc developer SQL execution:
-- Allows only read-only statements (`SELECT`, `WITH`, `EXPLAIN`).
-- Blocks all DDL, DML, and administrative commands (`DROP`, `DELETE`, `INSERT`, `UPDATE`, `ALTER`, `PRAGMA`).
+- **Layer 1**: Allows only read-only statements (`SELECT`, `WITH`, `EXPLAIN`).
+- **Layer 2**: Enforces table allowlists (`Doctors`, `Properties`, `Appointments`, `Specialties`) while blocking system catalog reads (`sqlite_master`) and recursive CTE DoS vectors.
+- **Execution Limits**: Hard cap of 100 returned rows and instruction step limits.
