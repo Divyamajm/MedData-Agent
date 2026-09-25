@@ -28,25 +28,25 @@ from query_cache import (
 )
 from database import init_database, DB_PATH
 
-# 18 Representative Queries (10 Unique + 8 Repeated/Normalized Variants)
+# 18 Representative Clinical Healthcare Queries (10 Unique + 8 Repeated/Normalized Variants)
 BENCHMARK_QUERIES: List[Tuple[str, bool]] = [
     # (Query Text, Is_Expected_Repeat)
     ("Find a cardiologist in Chennai under ₹1500 available today", False),
     ("Show me heart doctors nearby", False),
-    ("Find a 3BHK flat in Koramangala under ₹60,000", False),
+    ("Cardiac surgeon at Apollo Hospital Chennai", False),
     ("I need a neurologist in Bangalore", False),
     ("Orthopedic surgeon for knee replacement", False),
     ("Find a cardiologist in Chennai under ₹1500 available today", True),   # Repeat of 1 (Exact)
     ("Pediatrician for infant vaccination", False),
-    ("Safest neighborhood near hospital with low crime", False),
+    ("Neurologist with satisfaction above 90 under ₹2000", False),
     ("   find a cardiologist in chennai under ₹1500 available today?  ", True), # Repeat of 1 (Whitespace/Punctuation normalized)
     ("Show me all doctors", False),
     ("Show me heart doctors nearby", True),                                 # Repeat of 2 (Exact)
     ("Find Dr. Rajesh Sharma", False),
-    ("Find a 3BHK flat in Koramangala under ₹60,000", True),               # Repeat of 3 (Exact)
+    ("Cardiac surgeon at Apollo Hospital Chennai", True),                  # Repeat of 3 (Exact)
     ("Cheapest doctor available today", False),
     ("i need a neurologist in bangalore", True),                            # Repeat of 4 (Case variation)
-    ("Luxury villa in Indiranagar with high livability", False),
+    ("Pediatrician under ₹1000 available today", False),
     ("Orthopedic surgeon for knee replacement", True),                      # Repeat of 5 (Exact)
     ("Show me all doctors", True),                                         # Repeat of 10 (Exact)
 ]

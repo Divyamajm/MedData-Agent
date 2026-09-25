@@ -132,7 +132,7 @@ def check_acute_emergency(prompt: str) -> Optional[Dict[str, Any]]:
                     "🚨 **CRITICAL MEDICAL EMERGENCY WARNING** 🚨\n\n"
                     "If you or someone around you is experiencing a medical emergency, acute chest pain, severe bleeding, "
                     "or difficulty breathing:\n\n"
-                    "📞 **IMMEDIATELY CALL 911 (US/Canada), 112 (EU/India), or your local emergency response number.**\n\n"
+                    "📞 **IMMEDIATELY CALL 112 (National Emergency Helpline) or 108 (Ambulance Services).**\n\n"
                     "⚠️ Do NOT wait for an AI chat response. Go directly to the nearest hospital Emergency Room."
                 )
             }

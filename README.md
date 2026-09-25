@@ -21,10 +21,10 @@ In high-stakes clinical and real estate discovery, allowing an unconstrained LLM
 **MedData AI** implements a **strict separation of concerns**:
 1. **Input Boundary**: Natural language queries are parsed into structured filter objects conforming to a strict **Pydantic v2 Schema**.
    - **Dual-Engine Triage**: Supports sub-millisecond deterministic regex/dictionary classification (`<0.2ms` compilation latency) or bounded LLM function calling (**Google Gemini / OpenAI** structured JSON).
-2. **Safety & Guardrails Layer**: Programmatically intercepts acute emergencies (triggering 112/911 redirection), blocks clinical diagnosis/prescription attempts, identifies untracked schema attributes (zero guessing), and filters prompt injections.
+2. **Safety & Guardrails Layer**: Programmatically intercepts acute emergencies (triggering India's **112** National Emergency Protocol), blocks clinical diagnosis/prescription attempts, identifies untracked schema attributes (zero guessing), and filters prompt injections.
 3. **Query Caching & Invalidation Layer**: In-memory thread-safe LRU query plan cache that memoizes the expensive NL-to-SQL translation and AST validation step while keeping raw database row execution live and fresh.
 4. **Deterministic Query Compiler**: Converts validated Pydantic models into parameterized SQL queries with strict column allowlists (`ALLOWED_DOCTOR_COLUMNS`, `ALLOWED_SORT_METRICS`). **The LLM never touches, writes, or executes SQL.**
-5. **AST-Parsed SQL Security Sandbox (`sqlglot`)**: Real Abstract Syntax Tree (AST) query validation walking all `exp.Table` nodes to enforce table allowlists (`Doctors`, `Properties`, `Appointments`, `Specialties`) across CTEs, subqueries, and comma joins, while blocking internal system catalogs (`sqlite_master`) and execution DoS attacks.
+5. **AST-Parsed SQL Security Sandbox (`sqlglot`)**: Real Abstract Syntax Tree (AST) query validation walking all `exp.Table` nodes to enforce table allowlists (`Doctors`, `Appointments`, `Specialties`) across CTEs, subqueries, and comma joins, while blocking internal system catalogs (`sqlite_master`) and execution DoS attacks.
 
 ```
                               ┌────────────────────────────────────────┐
@@ -34,7 +34,7 @@ In high-stakes clinical and real estate discovery, allowing an unconstrained LLM
                                                  ▼
                               ┌────────────────────────────────────────┐
                               │       MULTI-TIER SAFETY LAYER          │
-                              │  • Acute Emergency Protocol (112/911)  │  ──► [BYPASS CACHE]
+                              │  • Acute Emergency Protocol (112)      │  ──► [BYPASS CACHE]
                               │  • Medical Advice / Diagnosis Refusal  │
                               │  • Unknown Field Zero-Guessing Filter  │
                               │  • Prompt Injection Defense            │
@@ -76,7 +76,7 @@ In high-stakes clinical and real estate discovery, allowing an unconstrained LLM
                                                                  │ Store Plan  │
                                                                  ▼             ▼
                                                   ┌────────────────────────────┐
-                                                  │ LIVE SQLITE / POSTGRES DB  │
+                                                  │    LIVE SQLITE DATABASE    │
                                                   │ (Fresh Table Row Fetching) │
                                                   └──────────────┬─────────────┘
                                                                  │
@@ -91,11 +91,11 @@ In high-stakes clinical and real estate discovery, allowing an unconstrained LLM
 ## ⚡ Query Caching & Dual Invalidation Architecture
 
 ### Why Caching Was Added
-In conversational discovery pipelines, repeated or semantically equivalent natural language queries (*"cardiologist in bangalore under 1000"*, *"  Cardiologist   in Bangalore  under 1000 "*), pagination requests, and concurrent user filtering frequently re-trigger the entire computational chain: **Intent Classification → Multi-Tier Safety Gates → Pydantic Schema Parsing → Query Parameter Generation → AST Traversal Sandboxing**.
+In conversational discovery pipelines, repeated or semantically equivalent natural language queries (*"cardiologist in chennai under 1500"*, *"  Cardiologist   in Chennai  under 1500 "*), pagination requests, and concurrent user filtering frequently re-trigger the entire computational chain: **Intent Classification → Multi-Tier Safety Gates → Pydantic Schema Parsing → Query Parameter Generation → AST Traversal Sandboxing**.
 
 Re-evaluating AST validation and intent extraction on identical NL prompts wastes CPU cycles and adds unnecessary latency.
 
-**Key Architecture Decision:** The cache **only stores the compiled and AST-validated SQL query plan and parameter bindings**, NOT the raw query result rows. This ensures that database reads always fetch live, real-time records from SQLite/PostgreSQL (such as newly scheduled appointments or updated fee structures) while eliminating repeated query compilation overhead.
+**Key Architecture Decision:** The cache **only stores the compiled and AST-validated SQL query plan and parameter bindings**, NOT the raw query result rows. This ensures that database reads always fetch live, real-time records from SQLite (such as newly scheduled appointments or updated fee structures) while eliminating repeated query compilation overhead.
 
 ### Invalidation Strategy (TTL + Schema-Hash Verification)
 Caching SQL generation without strict invalidation introduces severe correctness and security risks. MedData implements a **dual invalidation strategy**:
@@ -117,13 +117,13 @@ Caching SQL generation without strict invalidation introduces severe correctness
 - **Strict Emergency Triage Bypass (Non-Negotiable Invariant):** Acute emergency prompts (*"severe chest pain and shortness of breath"*, *"sudden slurred speech"*) are **never cached**. Emergency triage guardrails execute fresh on every request to prevent stale emergency routing.
 
 ### Measured Empirical Benchmark Results
-Benchmarked on 18 representative clinical discovery queries (11 unique initial queries + 7 repeated/near-duplicate queries) using `python benchmark.py`:
+Benchmarked on 18 representative clinical discovery queries (10 unique initial queries + 8 repeated/near-duplicate queries) using `python benchmark.py`:
 
 | Execution Mode | Total Pipeline Time (18 Queries) | Avg Latency on Repeated Queries | Cache Hit Rate |
 |---|:---:|:---:|:---:|
-| **Caching Disabled (Baseline)** | **29.854 ms** | **0.554 ms / query** | 0.0% (0/7) |
-| **Caching Enabled (LRU + Invalidation)** | **8.638 ms** | **0.048 ms / query** | **100.0% (7/7)** |
-| **Measured Improvement** | **-71.1% Total Time** | **-91.3% Latency (~11.5x speedup)** | **Sub-0.05ms Hits** |
+| **Caching Disabled (Baseline)** | **22.926 ms** | **0.529 ms / query** | 0.0% (0/7) |
+| **Caching Enabled (LRU + Invalidation)** | **8.597 ms** | **0.044 ms / query** | **100.0% (7/7)** |
+| **Measured Improvement** | **-62.5% Total Time** | **-91.6% Latency (~12x speedup)** | **Sub-0.05ms Hits** |
 
 *To reproduce these numbers locally, run `python benchmark.py`.*
 

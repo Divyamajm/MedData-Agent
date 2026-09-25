@@ -25,7 +25,7 @@ def test_acute_emergency_detection(emergency_prompt):
     res = check_acute_emergency(emergency_prompt)
     assert res is not None
     assert res.get("is_emergency") is True
-    assert "911" in res.get("message") or "112" in res.get("message")
+    assert "112" in res.get("message")
 
 
 @pytest.mark.safety
