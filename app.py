@@ -722,8 +722,11 @@ with tab_developer:
 
             st.divider()
             st.markdown("###### 📈 Real-Time Query Execution Latency Distribution (ms)")
-            chart_df = pd.DataFrame(tel_history)[["prompt", "latency_ms"]].set_index("prompt")
-            st.bar_chart(chart_df, height=260)
+            try:
+                chart_df = pd.DataFrame(tel_history)[["prompt", "latency_ms"]].set_index("prompt")
+                st.bar_chart(chart_df, height=260)
+            except Exception:
+                st.dataframe(pd.DataFrame(tel_history)[["prompt", "latency_ms"]], hide_index=True)
 
             st.markdown("###### 📋 Telemetry Event Log")
             st.dataframe(pd.DataFrame(tel_history)[::-1], hide_index=True)
