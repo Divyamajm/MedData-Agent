@@ -7,6 +7,13 @@ unknown attribute boundary enforcement, and token-based read-only SQL sandboxing
 import re
 from typing import Dict, Any, Optional, Tuple, List
 
+try:
+    import sqlglot
+    import sqlglot.expressions as exp
+    _SQLGLOT_AVAILABLE = True
+except ImportError:
+    _SQLGLOT_AVAILABLE = False
+
 
 # Healthcare database allowable fields
 ALLOWED_DOCTOR_COLUMNS = {
@@ -197,7 +204,16 @@ def validate_sql_sandbox_query(query: str) -> Tuple[bool, str]:
     Enforces strict read-only execution (SELECT / WITH CTE / EXPLAIN only).
     Rejects any mutation, DDL, administrative commands, system catalog reads,
     and recursive CTE resource-exhaustion vectors across the entire AST.
+
+    Fails closed: If the required AST parser (sqlglot) is unavailable,
+    refuses execution rather than degrading to an insecure validator.
     """
+    if not _SQLGLOT_AVAILABLE:
+        return False, (
+            "Security Violation: SQL sandbox disabled — required AST validator (sqlglot) "
+            "is not installed. Refusing execution rather than degrading to an insecure validator."
+        )
+
     if not query or not query.strip():
         return False, "Query cannot be empty."
 
@@ -208,80 +224,70 @@ def validate_sql_sandbox_query(query: str) -> Tuple[bool, str]:
     if not clean_query:
         return False, "Query contains no executable statements."
 
-    # 1. Parse AST with sqlglot
-    try:
-        import sqlglot
-        import sqlglot.expressions as exp
+    # Handle EXPLAIN statements by recursively validating the target statement
+    if re.match(r"^EXPLAIN\b", clean_query, re.IGNORECASE):
+        underlying_sql = re.sub(r"^EXPLAIN\s+(QUERY\s+PLAN\s+)?", "", clean_query, flags=re.IGNORECASE).strip()
+        if not underlying_sql or underlying_sql.lower() == clean_query.lower():
+            return False, "Security Violation: EXPLAIN statement has no target query."
         
-        try:
-            parsed_statements = sqlglot.parse(clean_query, read="sqlite")
-        except Exception as e:
-            return False, f"SQL Syntax Error: Unable to parse query AST ({str(e)})."
+        # Recursively validate underlying query wrapped by EXPLAIN / EXPLAIN QUERY PLAN
+        is_inner_safe, inner_decision = validate_sql_sandbox_query(underlying_sql)
+        if not is_inner_safe:
+            return False, f"Security Violation in EXPLAIN target: {inner_decision}"
+        return True, "EXPLAIN query passed read-only AST and table allowlist validation."
 
-        if not parsed_statements or parsed_statements[0] is None:
-            return False, "Query contains no executable SQL statements."
+    # Parse AST with sqlglot
+    try:
+        parsed_statements = sqlglot.parse(clean_query, read="sqlite")
+    except Exception as e:
+        return False, f"SQL Syntax Error: Unable to parse query AST ({str(e)})."
 
-        if len(parsed_statements) > 1:
-            return False, "Multi-statement queries (separated by ';') are forbidden in the read-only sandbox."
+    if not parsed_statements or parsed_statements[0] is None:
+        return False, "Query contains no executable SQL statements."
 
-        tree = parsed_statements[0]
+    if len(parsed_statements) > 1:
+        return False, "Multi-statement queries (separated by ';') are forbidden in the read-only sandbox."
 
-        # Handle EXPLAIN statements
-        if tree.key == "command":
-            cmd_text = str(tree.this).strip().upper()
-            if not cmd_text.startswith("EXPLAIN"):
-                return False, f"Security Violation: Command '{cmd_text}' is forbidden in read-only sandbox."
-            return True, "EXPLAIN query passed read-only security validation."
+    tree = parsed_statements[0]
 
-        # Enforce read-only statement type
-        if not isinstance(tree, (exp.Select, exp.Union, exp.Query)):
-            return False, f"Security Violation: Sandbox only allows read-only SELECT, WITH, or EXPLAIN statements. Received '{type(tree).__name__}'."
+    # Enforce read-only statement type
+    if not isinstance(tree, (exp.Select, exp.Union, exp.Query)):
+        return False, f"Security Violation: Sandbox only allows read-only SELECT, WITH, or EXPLAIN statements. Received '{type(tree).__name__}'."
 
-        # Block recursive CTEs
-        with_exp = tree.find(exp.With)
-        if with_exp and with_exp.args.get("recursive"):
-            return False, "Security Violation: Recursive CTEs (WITH RECURSIVE) are forbidden in the read-only sandbox."
+    # Block recursive CTEs (DoS prevention)
+    with_exp = tree.find(exp.With)
+    if with_exp and with_exp.args.get("recursive"):
+        return False, "Security Violation: Recursive CTEs (WITH RECURSIVE) are forbidden in the read-only sandbox."
 
-        # Collect declared CTE aliases
-        declared_ctes = set()
-        if hasattr(tree, "ctes"):
-            for cte in tree.ctes:
-                alias = getattr(cte, "alias_or_name", None) or getattr(cte, "alias", None)
-                if alias:
-                    declared_ctes.add(str(alias).upper())
+    # Collect declared CTE aliases
+    declared_ctes = set()
+    if hasattr(tree, "ctes"):
+        for cte in tree.ctes:
+            alias = getattr(cte, "alias_or_name", None) or getattr(cte, "alias", None)
+            if alias:
+                declared_ctes.add(str(alias).upper())
 
-        # Inspect all Table references across the entire AST (FROM, JOIN, comma joins, subqueries, CTE bodies)
-        for t in tree.find_all(exp.Table):
-            tbl_name = t.name.upper()
-            if tbl_name in FORBIDDEN_SYSTEM_TABLES:
-                return False, f"Security Violation: Access to system catalog table '{t.name}' is restricted."
-            if tbl_name in declared_ctes or tbl_name in ALLOWED_SANDBOX_TABLES:
-                continue
-            return False, f"Security Violation: Table '{t.name}' is not in the sandbox allowlist ({', '.join(sorted(ALLOWED_SANDBOX_TABLES))})."
+    # Inspect all Table references across the entire AST (FROM, JOIN, comma joins, subqueries, CTE bodies)
+    for t in tree.find_all(exp.Table):
+        tbl_name = t.name.upper()
+        # Check database/schema qualifier (e.g. main.Doctors vs custom_db.Doctors)
+        db_qualifier = getattr(t, "db", None)
+        if db_qualifier:
+            db_name = str(db_qualifier).upper()
+            if db_name in FORBIDDEN_SYSTEM_TABLES or tbl_name in FORBIDDEN_SYSTEM_TABLES:
+                return False, f"Security Violation: Access to system catalog '{t.sql()}' is restricted."
+            if db_name not in {"", "MAIN"}:
+                return False, f"Security Violation: Access to attached database schema '{db_qualifier}' is forbidden."
 
-        # Block any mutation or administrative expressions in the AST
-        forbidden_expr_types = (exp.Drop, exp.Delete, exp.Insert, exp.Update, exp.Alter, exp.Create)
-        if any(tree.find_all(forbidden_expr_types)):
-            return False, "Security Violation: Mutation or DDL statements are forbidden in the read-only sandbox."
+        if tbl_name in FORBIDDEN_SYSTEM_TABLES:
+            return False, f"Security Violation: Access to system catalog table '{t.name}' is restricted."
+        if tbl_name in declared_ctes or tbl_name in ALLOWED_SANDBOX_TABLES:
+            continue
+        return False, f"Security Violation: Table '{t.name}' is not in the sandbox allowlist ({', '.join(sorted(ALLOWED_SANDBOX_TABLES))})."
 
-        return True, "Query passed read-only AST and table allowlist validation."
+    # Block any mutation or administrative expressions in the AST
+    forbidden_expr_types = (exp.Drop, exp.Delete, exp.Insert, exp.Update, exp.Alter, exp.Create, exp.Command)
+    if any(tree.find_all(forbidden_expr_types)):
+        return False, "Security Violation: Mutation or DDL statements are forbidden in the read-only sandbox."
 
-    except ImportError:
-        # Fallback to token validation if sqlglot is not present
-        statements = [s.strip() for s in clean_query.split(";") if s.strip()]
-        if len(statements) > 1:
-            return False, "Multi-statement queries (separated by ';') are forbidden in the read-only sandbox."
-
-        first_stmt = statements[0]
-        tokens = re.findall(r"\b[A-Za-z_]+\b", first_stmt.upper())
-        if not tokens or tokens[0] not in {"SELECT", "WITH", "EXPLAIN"}:
-            return False, "Security Violation: Sandbox only allows read-only SELECT or WITH statements."
-
-        forbidden_tokens = {"DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "TRUNCATE", "RECURSIVE"}
-        for token in tokens:
-            if token in forbidden_tokens:
-                return False, f"Security Violation: Command '{token}' is forbidden."
-            if token in FORBIDDEN_SYSTEM_TABLES:
-                return False, f"Security Violation: Access to system table '{token}' is restricted."
-
-        return True, "Query passed read-only security validation."
+    return True, "Query passed read-only AST and table allowlist validation."

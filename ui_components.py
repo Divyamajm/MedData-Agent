@@ -5,6 +5,7 @@ interactive geo-spatial maps, side-by-side comparison matrices, .ics calendar ex
 and insurance calculators.
 """
 
+import html
 import textwrap
 from datetime import datetime
 import streamlit as st
@@ -12,6 +13,14 @@ import streamlit.components.v1 as components
 import pandas as pd
 from typing import Dict, Any, List, Optional
 from models import ExplainabilityAudit, QueryResult, DomainType
+
+
+def _esc(val: Any) -> str:
+    """Defensive HTML escaping for safe dynamic dataset interpolation into markdown/HTML cards."""
+    if val is None:
+        return ""
+    return html.escape(str(val))
+
 
 
 CUSTOM_CSS = """
@@ -295,19 +304,20 @@ def render_doctor_cards(doctors: List[Dict[str, Any]], show_table_fallback: bool
 
     for doc in doctors:
         is_avail = doc.get("is_available_today") == "Yes"
-        avail_badge = '<span class="badge-avail-today">🟢 Available Today</span>' if is_avail else f'<span class="badge-avail-next">📅 Next: {doc.get("next_available_date")}</span>'
+        next_date_escaped = _esc(doc.get("next_available_date"))
+        avail_badge = '<span class="badge-avail-today">🟢 Available Today</span>' if is_avail else f'<span class="badge-avail-next">📅 Next: {next_date_escaped}</span>'
         fee_val = doc.get('consultation_fee', 0)
         fee_str = "FREE (₹0)" if fee_val == 0 else f"₹{fee_val:,}"
 
         card_html = textwrap.dedent(f"""
             <div class="entity-card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div class="entity-title">{doc.get('name')}</div>
+                    <div class="entity-title">{_esc(doc.get('name'))}</div>
                     <div>{avail_badge}</div>
                 </div>
                 <div style="margin: 0.35rem 0 0.65rem 0; display: flex; align-items: center; gap: 8px;">
-                    <span class="badge-specialty">{doc.get('specialty')}</span>
-                    <span style="color: #94a3b8; font-size: 0.85rem;">• Surgery: <b style="color: #e2e8f0;">{doc.get('primary_surgery')}</b></span>
+                    <span class="badge-specialty">{_esc(doc.get('specialty'))}</span>
+                    <span style="color: #94a3b8; font-size: 0.85rem;">• Surgery: <b style="color: #e2e8f0;">{_esc(doc.get('primary_surgery'))}</b></span>
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item">⭐ Satisfaction: <span class="metric-val">{doc.get('satisfaction_score')}/100</span></div>
@@ -351,12 +361,12 @@ def render_housing_cards(properties: List[Dict[str, Any]]):
         card_html = textwrap.dedent(f"""
             <div class="entity-card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div class="entity-title">{p.get('title')}</div>
+                    <div class="entity-title">{_esc(p.get('title'))}</div>
                     <div><span class="{liv_badge_class}">🏆 Livability: {livability}/100</span></div>
                 </div>
                 <div style="margin: 0.35rem 0 0.65rem 0; display: flex; align-items: center; gap: 8px;">
-                    <span class="badge-specialty">📍 {p.get('neighborhood')}, {p.get('city', 'Bengaluru')}</span>
-                    <span style="color: #94a3b8; font-size: 0.85rem;">• {p.get('property_type')} • <b style="color: #e2e8f0;">{p.get('bedrooms')} BHK / {p.get('bathrooms')} Bath</b> ({p.get('sqft')} sqft)</span>
+                    <span class="badge-specialty">📍 {_esc(p.get('neighborhood'))}, {_esc(p.get('city', 'Bengaluru'))}</span>
+                    <span style="color: #94a3b8; font-size: 0.85rem;">• {_esc(p.get('property_type'))} • <b style="color: #e2e8f0;">{p.get('bedrooms')} BHK / {p.get('bathrooms')} Bath</b> ({p.get('sqft')} sqft)</span>
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item">💰 Rent: <span class="metric-val">₹{rent_val:,}/mo</span></div>

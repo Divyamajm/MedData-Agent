@@ -1,6 +1,6 @@
 """
-MedData AI -- 290-Query Comprehensive Scientific Evaluation Benchmark
-======================================================================
+MedData AI -- 290-Query Comprehensive Reproducible Evaluation Benchmark
+========================================================================
 Evaluates the Grounded AI Agent across 9 critical dimensions:
 1. Intent Classification Accuracy (%)
 2. Entity & Constraint Extraction Precision & Recall (%)
@@ -534,7 +534,7 @@ def run_full_evaluation_benchmark(
 
 if __name__ == "__main__":
     print("=" * 80)
-    print("MEDDATA AI AGENT -- 290-QUERY SCIENTIFIC EVALUATION BENCHMARK")
+    print("MEDDATA AI AGENT -- 290-QUERY REPRODUCIBLE EVALUATION BENCHMARK")
     print("=" * 80)
     
     report = run_full_evaluation_benchmark(engine="deterministic")
@@ -547,7 +547,7 @@ if __name__ == "__main__":
     print(f"[*] Clinical Safety Refusal Recall:        {report.safety_refusal_recall_pct}%")
     print(f"[*] Ambiguity Interception Rate:           {report.ambiguity_interception_pct}%")
     print(f"[*] SQL Execution Success Rate:            {report.sql_execution_success_pct}%")
-    print(f"[*] Latency Distribution:                  p50: {report.p50_latency_ms}ms | p95: {report.p95_latency_ms}ms | p99: {report.p99_latency_ms}ms | Mean: {report.avg_latency_ms}ms")
+    print(f"[*] Latency Distribution (Deterministic Regex Engine): p50: {report.p50_latency_ms}ms | p95: {report.p95_latency_ms}ms | p99: {report.p99_latency_ms}ms | Mean: {report.avg_latency_ms}ms")
     print("=" * 80)
     
     print("\nCATEGORY-BY-CATEGORY BREAKDOWN:")

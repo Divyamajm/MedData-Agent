@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test:
-    name: Run Automated Pytest Suites, Verification Batteries & Scientific Evals
+    name: Run Automated Pytest Suites, Verification Batteries & Empirical Evals
     runs-on: ubuntu-latest
 
     steps:
@@ -31,14 +31,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Execute Pytest Suite (45 Tests)
+      - name: Execute Full Pytest Suite (Adversarial SQL, Security & API Tests)
         run: |
           pytest -v
 
-      - name: Execute MedData 32-Test Core Verification Battery
+      - name: Execute Core 32-Test Verification & 25+ SQL Security Battery
         run: |
           python -m tests.test_suite
 
-      - name: Execute MedData 290-Query Scientific Evaluation Benchmark
+      - name: Execute MedData 290-Query Reproducible Evaluation Benchmark
         run: |
           python -m tests.eval_benchmark
+
+      - name: Execute MedData Asynchronous Concurrency Load Benchmark
+        run: |
+          python -m tests.load_test
+
+      - name: Upload Verification & Benchmark Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-and-benchmark-logs
+          path: |
+            docs/verification_run.md
+          if-no-files-found: ignore
+

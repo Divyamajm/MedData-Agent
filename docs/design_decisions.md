@@ -25,3 +25,18 @@
 - **Problem**: Streamlit apps are single-process monoliths that cannot easily serve external web/mobile clients or handle headless API traffic.
 - **Decision**: Build a standalone REST API in `api.py` with OpenAPI docs at `/docs`.
 - **Benefit**: The discovery and query engine can now be consumed by any external React/Vite frontend, mobile app, or backend microservice.
+
+---
+
+## 5. Why Non-Destructive Additive Schema Migrations (`ALTER TABLE`)?
+- **Problem**: Naive schema checks that drop and recreate tables discard live user state (such as confirmed appointment bookings).
+- **Decision**: `init_database` inspects columns via `PRAGMA table_info` and issues non-destructive `ALTER TABLE ... ADD COLUMN` statements for new schema attributes.
+- **Benefit**: Data continuity is preserved across restarts; table drop/recreation is restricted strictly to explicit `force_reset=True` developer resets.
+
+---
+
+## 6. Why Fail-Closed Defaults and Single-Worker In-Memory Constraints?
+- **Problem**: Security systems that fail open expose unprotected endpoints if misconfigured. In-memory rate limiters distributed across uncoordinated multi-process workers silently fail to enforce global limits.
+- **Decision**: Enforce fail-closed authentication (`MEDDATA_ALLOW_UNAUTHENTICATED_DEMO=false` by default, rejecting unkeyed traffic with 503), bind uvicorn to `--workers 1` for consistent in-memory rate limiting, and restrict `X-Forwarded-For` trust to known proxy IPs.
+- **Benefit**: Zero accidental public exposure in production, deterministic sliding-window rate tracking, and resistance to IP spoofing bypasses.
+

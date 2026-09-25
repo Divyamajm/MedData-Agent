@@ -5,6 +5,7 @@ Tests failure modes, malformed JSON recovery, API timeouts, HTTP 500 errors,
 pre-LLM safety checks, and strict SQL sandbox table/catalog defenses.
 """
 
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 from models import IntentType, DomainType
@@ -52,16 +53,30 @@ def test_llm_parser_http_500_fallback():
         assert "500" in str(err)
 
 
+import requests
+
 def test_llm_parser_network_timeout_fallback():
-    """Verifies that a network timeout triggers graceful degradation to deterministic parser."""
-    with patch("requests.post", side_effect=TimeoutError("Request timed out")):
+    """Verifies that a requests Timeout exception triggers graceful degradation."""
+    with patch("requests.post", side_effect=requests.exceptions.Timeout("HTTPSConnectionPool: Read timed out.")):
         res, latency, err = parse_intent_with_llm(
             "Find a cardiologist in Chennai under 1500",
             api_key="AIzaSyTestMockKey123",
             provider="gemini"
         )
         assert res is None
-        assert "timed out" in str(err).lower() or "error" in str(err).lower()
+        assert "timed out" in str(err).lower() or "timeout" in str(err).lower() or "error" in str(err).lower()
+
+
+def test_llm_parser_connection_error_fallback():
+    """Verifies that a requests ConnectionError exception triggers graceful degradation."""
+    with patch("requests.post", side_effect=requests.exceptions.ConnectionError("Failed to resolve host")):
+        res, latency, err = parse_intent_with_llm(
+            "Find a cardiologist in Chennai under 1500",
+            api_key="AIzaSyTestMockKey123",
+            provider="gemini"
+        )
+        assert res is None
+        assert "connection" in str(err).lower() or "failed" in str(err).lower() or "error" in str(err).lower()
 
 
 def test_hybrid_parser_degrades_gracefully_on_llm_failure():
@@ -155,3 +170,153 @@ def test_llm_parser_valid_json_wrong_schema_fallback():
         )
         # Should gracefully handle the invalid type without uncaught exception
         assert res is not None or err is not None
+
+
+def test_sandbox_fails_closed_when_sqlglot_missing():
+    """Verifies that if sqlglot is missing, sandbox fails closed and refuses all queries."""
+    with patch("safety._SQLGLOT_AVAILABLE", False):
+        is_safe, decision = validate_sql_sandbox_query("SELECT * FROM Doctors;")
+        assert is_safe is False
+        assert "Security Violation" in decision or "disabled" in decision
+
+
+def test_sandbox_blocks_explain_wrapped_mutation():
+    """Verifies that mutation statements wrapped in EXPLAIN or EXPLAIN QUERY PLAN are blocked."""
+    queries = [
+        "EXPLAIN DROP TABLE Doctors;",
+        "EXPLAIN QUERY PLAN DELETE FROM Doctors WHERE id = 1;",
+        "EXPLAIN UPDATE Doctors SET consultation_fee = 0;",
+        "EXPLAIN SELECT * FROM RandomTable;"
+    ]
+    for q in queries:
+        is_safe, decision = validate_sql_sandbox_query(q)
+        assert is_safe is False, f"Expected EXPLAIN mutation to be blocked: {q}"
+        assert "Security Violation" in decision or "forbidden" in decision or "not in the sandbox allowlist" in decision
+
+
+def test_llm_parser_gemini_happy_path_structured_mapping():
+    """Happy-path test: Verifies valid Gemini structured JSON is correctly parsed into SearchFilters."""
+    from models import CanonicalSpecialty
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "candidates": [{
+            "content": {
+                "parts": [{
+                    "text": json.dumps({
+                        "domain": "healthcare",
+                        "intent": "doctor_search",
+                        "ambiguity_detected": False,
+                        "clarification_needed": None,
+                        "confidence": 0.98,
+                        "filters": {
+                            "specialty": "Cardiology",
+                            "max_distance": 15.0,
+                            "max_fee": 1500.0,
+                            "available_today": True,
+                            "negated_specialties": []
+                        }
+                    })
+                }]
+            }
+        }]
+    }
+
+    with patch("requests.post", return_value=mock_resp):
+        res, latency, err = parse_intent_with_llm(
+            "Find a cardiologist in Chennai under 1500 available today",
+            api_key="AIzaSyTestMockKey123",
+            provider="gemini"
+        )
+        assert err is None
+        assert res is not None
+        assert res.domain == DomainType.HEALTHCARE
+        assert res.intent == IntentType.DOCTOR_SEARCH
+        assert res.filters is not None
+        assert res.filters.specialty == CanonicalSpecialty.CARDIOLOGY
+        assert res.filters.max_fee == 1500.0
+        assert res.filters.max_distance == 15.0
+        assert res.filters.available_today is True
+        assert res.ambiguity_detected is False
+
+
+def test_llm_parser_openai_happy_path_with_synonym_resolution():
+    """Happy-path test: Verifies OpenAI response with specialty synonym ('Cardiologist') resolves to CanonicalSpecialty."""
+    from models import CanonicalSpecialty
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "choices": [{
+            "message": {
+                "content": json.dumps({
+                    "domain": "healthcare",
+                    "intent": "doctor_search",
+                    "ambiguity_detected": False,
+                    "clarification_needed": None,
+                    "confidence": 0.95,
+                    "filters": {
+                        "specialty": "Cardiologist",
+                        "max_distance": None,
+                        "max_fee": 2000.0,
+                        "available_today": False,
+                        "negated_specialties": []
+                    }
+                })
+            }
+        }]
+    }
+
+    with patch("requests.post", return_value=mock_resp):
+        res, latency, err = parse_intent_with_llm(
+            "Find a cardiologist charging under 2000",
+            api_key="sk-TestMockOpenAIKey123",
+            provider="openai"
+        )
+        assert err is None
+        assert res is not None
+        assert res.domain == DomainType.HEALTHCARE
+        assert res.intent == IntentType.DOCTOR_SEARCH
+        assert res.filters is not None
+        assert res.filters.specialty == CanonicalSpecialty.CARDIOLOGY
+        assert res.filters.max_fee == 2000.0
+        assert res.filters.available_today is False
+
+
+def test_llm_parser_ambiguity_detection_happy_path():
+    """Happy-path test: Verifies ambiguous user query is flagged with clarification message."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "candidates": [{
+            "content": {
+                "parts": [{
+                    "text": json.dumps({
+                        "domain": "healthcare",
+                        "intent": "ranking",
+                        "ambiguity_detected": True,
+                        "clarification_needed": "Would you like to rank doctors by patient satisfaction score or lowest fee?",
+                        "confidence": 0.90,
+                        "filters": {
+                            "specialty": "Neurology",
+                            "max_distance": None,
+                            "max_fee": None,
+                            "available_today": False,
+                            "negated_specialties": []
+                        }
+                    })
+                }]
+            }
+        }]
+    }
+
+    with patch("requests.post", return_value=mock_resp):
+        res, latency, err = parse_intent_with_llm(
+            "Who is the best neurologist?",
+            api_key="AIzaSyTestMockKey123",
+            provider="gemini"
+        )
+        assert err is None
+        assert res is not None
+        assert res.ambiguity_detected is True
+        assert "satisfaction" in res.ambiguity_reason.lower()
+

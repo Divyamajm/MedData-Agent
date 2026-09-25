@@ -133,12 +133,12 @@ def execute_doctor_search(filters: SearchFilters, db_path: str = DB_PATH) -> Que
     start_time = time.perf_counter()
     sql_template, params, applied_filters = build_safe_query(filters)
 
+    conn = None
     try:
         conn = get_connection(db_path)
         c = conn.cursor()
         c.execute(sql_template, params)
         rows = [dict(row) for row in c.fetchall()]
-        conn.close()
         
         execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
         row_count = len(rows)
@@ -177,6 +177,9 @@ def execute_doctor_search(filters: SearchFilters, db_path: str = DB_PATH) -> Que
             explanation="Failed to execute database query safely.",
             error_message=str(e)
         )
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 # ==========================================
@@ -268,12 +271,12 @@ def execute_housing_search(filters: HousingSearchFilters, db_path: str = DB_PATH
     start_time = time.perf_counter()
     sql_template, params, applied_filters = build_safe_housing_query(filters)
 
+    conn = None
     try:
         conn = get_connection(db_path)
         c = conn.cursor()
         c.execute(sql_template, params)
         rows = [dict(row) for row in c.fetchall()]
-        conn.close()
         
         execution_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
         row_count = len(rows)
@@ -316,6 +319,9 @@ def execute_housing_search(filters: HousingSearchFilters, db_path: str = DB_PATH
             explanation="Failed to execute housing database query safely.",
             error_message=str(e)
         )
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def generate_relaxation_suggestions(filters: SearchFilters, db_path: str = DB_PATH) -> List[Dict[str, Any]]:
@@ -327,52 +333,177 @@ def generate_relaxation_suggestions(filters: SearchFilters, db_path: str = DB_PA
         relaxed_distance = filters.max_distance + 10.0
         relaxed_filters = filters.model_copy(update={"max_distance": relaxed_distance})
         sql, params, _ = build_safe_query(relaxed_filters)
-        conn = get_connection(db_path)
-        c = conn.cursor()
-        c.execute(sql, params)
-        cnt = len(c.fetchall())
-        conn.close()
-        if cnt > 0:
-            suggestions.append({
-                "description": f"Expand search radius to {relaxed_distance} miles (Yields {cnt} doctors)",
-                "relaxed_filter": "max_distance",
-                "new_value": relaxed_distance
-            })
+        conn = None
+        try:
+            conn = get_connection(db_path)
+            c = conn.cursor()
+            c.execute(sql, params)
+            cnt = len(c.fetchall())
+            if cnt > 0:
+                suggestions.append({
+                    "description": f"Expand search radius to {relaxed_distance} miles (Yields {cnt} doctors)",
+                    "relaxed_filter": "max_distance",
+                    "new_value": relaxed_distance
+                })
+        finally:
+            if conn is not None:
+                conn.close()
 
     # 2. Relax fee
     if filters.max_fee is not None:
         relaxed_fee = filters.max_fee + 100
         relaxed_filters = filters.model_copy(update={"max_fee": relaxed_fee})
         sql, params, _ = build_safe_query(relaxed_filters)
-        conn = get_connection(db_path)
-        c = conn.cursor()
-        c.execute(sql, params)
-        cnt = len(c.fetchall())
-        conn.close()
-        if cnt > 0:
-            suggestions.append({
-                "description": f"Increase max fee to ${relaxed_fee} (Yields {cnt} doctors)",
-                "relaxed_filter": "max_fee",
-                "new_value": relaxed_fee
-            })
+        conn = None
+        try:
+            conn = get_connection(db_path)
+            c = conn.cursor()
+            c.execute(sql, params)
+            cnt = len(c.fetchall())
+            if cnt > 0:
+                suggestions.append({
+                    "description": f"Increase max fee to ${relaxed_fee} (Yields {cnt} doctors)",
+                    "relaxed_filter": "max_fee",
+                    "new_value": relaxed_fee
+                })
+        finally:
+            if conn is not None:
+                conn.close()
 
     # 3. Relax same-day availability
     if filters.available_today:
         relaxed_filters = filters.model_copy(update={"available_today": None})
         sql, params, _ = build_safe_query(relaxed_filters)
-        conn = get_connection(db_path)
-        c = conn.cursor()
-        c.execute(sql, params)
-        cnt = len(c.fetchall())
-        conn.close()
-        if cnt > 0:
-            suggestions.append({
-                "description": f"Include doctors available later this week (Yields {cnt} doctors)",
-                "relaxed_filter": "available_today",
-                "new_value": None
-            })
+        conn = None
+        try:
+            conn = get_connection(db_path)
+            c = conn.cursor()
+            c.execute(sql, params)
+            cnt = len(c.fetchall())
+            if cnt > 0:
+                suggestions.append({
+                    "description": f"Include doctors available later this week (Yields {cnt} doctors)",
+                    "relaxed_filter": "available_today",
+                    "new_value": None
+                })
+        finally:
+            if conn is not None:
+                conn.close()
 
     return suggestions
 
 # Standard alias
 execute_query = execute_doctor_search
+
+
+# ==========================================
+# ⚡ CACHED END-TO-END QUERY EXECUTION PIPELINE
+# ==========================================
+
+def execute_cached_nl_query(
+    prompt: str,
+    engine: str = "deterministic",
+    api_key: Optional[str] = None,
+    provider: str = "gemini",
+    db_path: str = DB_PATH,
+    use_cache: bool = True,
+    cache_instance: Optional[Any] = None
+) -> Tuple[QueryResult, bool, float]:
+    """
+    End-to-end execution of a Natural Language query with LRU caching & AST validation:
+    1. Compiles and validates NL query into parameterized SQL (using query_cache).
+    2. Executes live SQL with params against SQLite (ensuring real-time ground truth data).
+    
+    Returns: (QueryResult, is_cache_hit: bool, total_latency_ms: float)
+    """
+    from query_cache import compile_and_validate_query_with_cache, global_query_cache
+    cache = cache_instance or global_query_cache
+
+    start_time = time.perf_counter()
+    
+    # 1. Compile & Validate (Cached NL->SQL step)
+    plan, is_hit, compile_ms = compile_and_validate_query_with_cache(
+        prompt=prompt,
+        engine=engine,
+        api_key=api_key,
+        provider=provider,
+        db_path=db_path,
+        use_cache=use_cache,
+        cache_instance=cache
+    )
+
+    # If the query was intercepted by safety / emergency refusal
+    if plan.intent in [
+        IntentType.EMERGENCY,
+        IntentType.MEDICAL_ADVICE,
+        IntentType.UNKNOWN_ATTRIBUTE,
+        IntentType.PROMPT_INJECTION
+    ]:
+        total_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return QueryResult(
+            success=False,
+            domain=plan.domain,
+            data=[],
+            row_count=0,
+            sql_template=plan.sql_template,
+            params=plan.params,
+            execution_time_ms=total_time_ms,
+            applied_filters=plan.applied_filters,
+            explanation=plan.explanation,
+            relaxation_suggestions=[]
+        ), is_hit, total_time_ms
+
+    # 2. Live Database Execution (Fresh row fetching)
+    conn = None
+    try:
+        conn = get_connection(db_path)
+        c = conn.cursor()
+        c.execute(plan.sql_template, plan.params)
+        rows = [dict(row) for row in c.fetchall()]
+        row_count = len(rows)
+        total_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+        relaxation_suggestions = []
+        if row_count == 0:
+            if plan.domain == DomainType.REAL_ESTATE and plan.housing_filters:
+                relaxation_suggestions = [
+                    {"description": "Increase budget threshold by ₹5,000", "relaxed_filter": "max_price"},
+                    {"description": "Expand hospital search radius by +2.0 km", "relaxed_filter": "max_hospital_distance"},
+                ]
+            elif plan.filters:
+                relaxation_suggestions = generate_relaxation_suggestions(plan.filters, db_path)
+
+        explanation = f"Found {row_count} matching record(s) from database."
+        if row_count == 0:
+            explanation = "No records in the database currently match all specified filters."
+
+        return QueryResult(
+            success=True,
+            domain=plan.domain,
+            data=rows,
+            row_count=row_count,
+            sql_template=plan.sql_template,
+            params=plan.params,
+            execution_time_ms=total_time_ms,
+            applied_filters=plan.applied_filters,
+            explanation=explanation,
+            relaxation_suggestions=relaxation_suggestions
+        ), is_hit, total_time_ms
+    except Exception as e:
+        total_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return QueryResult(
+            success=False,
+            domain=plan.domain,
+            data=[],
+            row_count=0,
+            sql_template=plan.sql_template,
+            params=plan.params,
+            execution_time_ms=total_time_ms,
+            applied_filters=plan.applied_filters,
+            explanation="Failed to execute database query safely.",
+            error_message=str(e)
+        ), is_hit, total_time_ms
+    finally:
+        if conn is not None:
+            conn.close()
+

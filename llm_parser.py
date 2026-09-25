@@ -195,10 +195,14 @@ def parse_intent_with_llm(
         spec_str = filters_dict.get("specialty")
         canonical_spec = None
         if spec_str:
+            clean_spec = str(spec_str).strip().lower()
             for member in CanonicalSpecialty:
-                if member.value.lower() == spec_str.lower() or member.name.lower() == spec_str.lower():
+                if member.value.lower() == clean_spec or member.name.lower() == clean_spec:
                     canonical_spec = member
                     break
+            if not canonical_spec:
+                from intent_parser import SPECIALTY_SYNONYMS
+                canonical_spec = SPECIALTY_SYNONYMS.get(clean_spec)
 
         search_filters = SearchFilters(
             specialty=canonical_spec,

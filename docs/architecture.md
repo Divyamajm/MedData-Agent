@@ -47,23 +47,24 @@
              ├── Allowlist column validation
              ├── SQL placeholder binding (? / :val)
              └── Zero string-concatenation guarantee
-                           │
-                           ▼
-             [ READ-ONLY SQL SECURITY SANDBOX ]
-             ├── First-token allowlist (SELECT, WITH, EXPLAIN)
-             ├── Table allowlist (Doctors, Properties, Appointments)
-             ├── Catalog blocklist (sqlite_master) & DoS caps
-             └── Mutation / DDL blocklist
-                           │
-                           ▼
-             [ SQLITE / DATA LAKE STORAGE ]
-             ├── 200 Synthetic Indian Specialist Records (WAL Mode)
-             ├── 50 Synthetic UrbanLocate Property Records
-             └── Real-Time ACID Appointments
-                           │
-                           ▼
-             [ EXPLAINABILITY & AUDIT TRAIL ]
-             └── Execution metadata, Latency, Grounding proofs
+                            │
+                            ▼
+              [ AST-PARSED SQL SECURITY SANDBOX ]
+              ├── Root AST type allowlist (SELECT, WITH, validated EXPLAIN)
+              ├── Full-tree table allowlist (Doctors, Properties, Appointments, Specialties)
+              ├── Catalog blocklist (sqlite_master) & Recursive CTE DoS blocks
+              ├── Fail-Closed Dependency Enforcement (sqlglot required)
+              └── Instruction step monitor (200k VM steps) & 100-row cap
+                            │
+                            ▼
+              [ SQLITE / DATA LAKE STORAGE ]
+              ├── 200 Synthetic Indian Specialist Records (WAL Mode)
+              ├── 50 Synthetic UrbanLocate Property Records
+              └── Real-Time ACID Appointments
+                            │
+                            ▼
+              [ EXPLAINABILITY & AUDIT TRAIL ]
+              └── Execution metadata, Latency, Grounding proofs
 ```
 
 ---
@@ -86,8 +87,9 @@ Converts validated `SearchFilters` into secure parameterized SQL:
 - Uses strictly allowlisted column sets (`ALLOWED_DOCTOR_COLUMNS`, `ALLOWED_SORT_METRICS`).
 - Values are bound through SQLite parameter placeholders (`?`), preventing SQL injections.
 
-### 4. Read-Only SQL Security Sandbox (`safety.py` & `api.py`)
-Protects ad-hoc developer SQL execution:
-- **Layer 1**: Allows only read-only statements (`SELECT`, `WITH`, `EXPLAIN`).
-- **Layer 2**: Enforces table allowlists (`Doctors`, `Properties`, `Appointments`, `Specialties`) while blocking system catalog reads (`sqlite_master`) and recursive CTE DoS vectors.
-- **Execution Limits**: Hard cap of 100 returned rows and instruction step limits.
+### 4. AST-Parsed SQL Security Sandbox (`safety.py` & `api.py`)
+Protects ad-hoc developer SQL execution using real AST syntax tree traversal via `sqlglot`:
+- **Fail-Closed Security**: If `sqlglot` is missing or fails to import, the sandbox refuses execution unconditionally rather than degrading to a weaker validator.
+- **AST Root & Statement Traversal**: Allows only read-only statements (`SELECT`, `WITH`, or recursively validated `EXPLAIN`). Blocks mutations (`DROP`, `DELETE`, `INSERT`, `UPDATE`, `ALTER`).
+- **Table Allowlist**: Walks all `exp.Table` nodes across `FROM`, explicit `JOIN`, comma joins, subqueries, and CTE bodies to ensure only allowed tables (`Doctors`, `Properties`, `Appointments`, `Specialties`) or declared CTE aliases are referenced.
+- **Execution Limits & Teardown**: Hard cap of 100 returned rows, SQLite progress handler capping VM instructions at ~200,000 steps, and guaranteed `try ... finally: conn.close()` connection teardown.

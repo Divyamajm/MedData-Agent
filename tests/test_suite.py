@@ -114,18 +114,34 @@ def run_all_tests(test_cases: List[TestCase] = ALL_TEST_CASES) -> List[TestCaseR
 
 
 def run_sql_sandbox_security_tests() -> Dict[str, Any]:
-    """Runs a dedicated security test battery on the SQL Sandbox validator."""
+    """Runs a dedicated security test battery on the SQL Sandbox AST validator."""
     test_queries = [
         ("SELECT * FROM Doctors;", True, "Simple safe SELECT"),
         ("SELECT specialty, COUNT(*) FROM Doctors GROUP BY specialty;", True, "Aggregate SELECT"),
         ("WITH TopDocs AS (SELECT * FROM Doctors) SELECT * FROM TopDocs;", True, "CTE Read-only"),
+        ("SELECT * FROM main.Doctors;", True, "Schema-qualified allowed table"),
+        ("SELECT * FROM doctors WHERE specialty = 'Cardiology';", True, "Case-insensitive table"),
+        ("EXPLAIN QUERY PLAN SELECT * FROM Doctors WHERE city = 'Chennai';", True, "EXPLAIN on valid SELECT"),
         ("DROP TABLE Doctors;", False, "Malicious DROP TABLE"),
         ("DELETE FROM Doctors WHERE id = 1;", False, "Malicious DELETE"),
         ("UPDATE Doctors SET consultation_fee = 0;", False, "Malicious UPDATE"),
         ("INSERT INTO Doctors (name) VALUES ('Hacked');", False, "Malicious INSERT"),
         ("PRAGMA table_info(Doctors);", False, "Administrative PRAGMA"),
         ("SELECT * FROM Doctors; DROP TABLE Doctors;", False, "Multi-statement injection"),
-        ("ALTER TABLE Doctors ADD COLUMN secret TEXT;", False, "DDL ALTER TABLE")
+        ("ALTER TABLE Doctors ADD COLUMN secret TEXT;", False, "DDL ALTER TABLE"),
+        ("SELECT * FROM sqlite_master;", False, "System catalog sqlite_master"),
+        ("SELECT * FROM sqlite_schema;", False, "System catalog sqlite_schema"),
+        ("SELECT * FROM main.sqlite_master;", False, "Schema-qualified system catalog"),
+        ("WITH x AS (SELECT 1) SELECT * FROM RandomTable;", False, "CTE with unlisted table"),
+        ("WITH a AS (SELECT 1), b AS (SELECT * FROM RandomTable) SELECT * FROM a,b;", False, "Multi-CTE with unlisted table"),
+        ("SELECT * FROM Doctors, RandomTable;", False, "Comma join with unlisted table"),
+        ("SELECT * FROM Doctors JOIN RandomTable ON Doctors.id = RandomTable.id;", False, "Explicit JOIN with unlisted table"),
+        ("SELECT * FROM Doctors WHERE id IN (SELECT id FROM RandomTable);", False, "Subquery with unlisted table"),
+        ("WITH RECURSIVE cnt(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM cnt) SELECT count(*) FROM cnt;", False, "Recursive CTE DoS"),
+        ("SELECT * FROM Doctors UNION SELECT sql, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 FROM sqlite_master;", False, "UNION with system catalog"),
+        ("EXPLAIN DROP TABLE Doctors;", False, "EXPLAIN-wrapped DROP mutation"),
+        ("EXPLAIN QUERY PLAN DELETE FROM Doctors;", False, "EXPLAIN QUERY PLAN DELETE mutation"),
+        ("EXPLAIN SELECT * FROM RandomTable;", False, "EXPLAIN with unlisted table"),
     ]
 
     passed_count = 0
@@ -149,6 +165,74 @@ def run_sql_sandbox_security_tests() -> Dict[str, Any]:
         "passed": passed_count,
         "all_passed": (passed_count == len(test_queries)),
         "details": details
+    }
+
+
+def run_query_cache_tests() -> Dict[str, Any]:
+    """Runs functional tests verifying LRU caching, TTL expiration, schema drift flush, and emergency bypass."""
+    from query_cache import QueryCache, CachedQueryPlan, normalize_query, compile_and_validate_query_with_cache
+    
+    cache_tests = []
+    
+    # 1. Normalization
+    n_pass = (normalize_query("  FIND a Cardiologist?  ") == "find a cardiologist")
+    cache_tests.append(("Query Normalization", n_pass, "Normalizes casing, whitespace, and punctuation"))
+    
+    # 2. Cache Hit
+    cache = QueryCache(max_size=5, ttl_seconds=60)
+    q = "Find a cardiologist in Chennai"
+    plan1, hit1, _ = compile_and_validate_query_with_cache(q, use_cache=True, cache_instance=cache)
+    plan2, hit2, _ = compile_and_validate_query_with_cache(q, use_cache=True, cache_instance=cache)
+    hit_pass = (not hit1) and hit2 and (plan1.sql_template == plan2.sql_template)
+    cache_tests.append(("Cache Hit & Retrieval", hit_pass, "Returns identical SQL on hit without re-parsing"))
+    
+    # 3. TTL Expiry
+    short_cache = QueryCache(max_size=5, ttl_seconds=0.05)
+    short_cache.put(q, plan1)
+    time.sleep(0.08)
+    exp_pass = (short_cache.get(q) is None and short_cache.stats["expirations"] == 1)
+    cache_tests.append(("TTL Expiration", exp_pass, "Stale entries automatically expire and miss after TTL"))
+    
+    # 4. Schema Drift Flush
+    schema_cache = QueryCache(max_size=5, ttl_seconds=60, schema_check_interval_seconds=0.0)
+    schema_cache.put(q, plan1)
+    conn = get_connection()
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS _cache_test_schema (id INT);")
+        conn.commit()
+    finally:
+        conn.close()
+    drift_pass = (schema_cache.get(q) is None and schema_cache.stats["schema_invalidations"] == 1)
+    conn = get_connection()
+    try:
+        conn.execute("DROP TABLE IF EXISTS _cache_test_schema;")
+        conn.commit()
+    finally:
+        conn.close()
+    cache_tests.append(("Schema Invalidation", drift_pass, "Flushes entire cache when sqlite_master changes"))
+    
+    # 5. Emergency Query Bypass
+    em_cache = QueryCache(max_size=5, ttl_seconds=60)
+    em_q = "I am having a heart attack and cannot breathe"
+    em_plan, em_hit, _ = compile_and_validate_query_with_cache(em_q, use_cache=True, cache_instance=em_cache)
+    em_pass = (len(em_cache._cache) == 0 and em_cache.stats["bypasses"] == 1 and em_cache.get(em_q) is None)
+    cache_tests.append(("Emergency Query Bypass", em_pass, "Acute healthcare emergencies strictly bypass cache"))
+    
+    # 6. LRU Eviction
+    lru_cache = QueryCache(max_size=2, ttl_seconds=60)
+    lru_cache.put("Q1", plan1)
+    lru_cache.put("Q2", plan1)
+    lru_cache.get("Q1")  # Q2 is now LRU
+    lru_cache.put("Q3", plan1)
+    lru_pass = (lru_cache.get("Q2") is None and lru_cache.get("Q1") is not None and lru_cache.stats["evictions"] == 1)
+    cache_tests.append(("LRU Eviction Policy", lru_pass, "Least recently used entry evicted when max capacity reached"))
+
+    passed_count = sum(1 for _, p, _ in cache_tests if p)
+    return {
+        "total": len(cache_tests),
+        "passed": passed_count,
+        "all_passed": (passed_count == len(cache_tests)),
+        "details": [{"name": n, "passed": p, "description": d} for n, p, d in cache_tests]
     }
 
 
@@ -176,9 +260,13 @@ def print_cli_test_report():
     # Run SQL security tests
     sandbox_res = run_sql_sandbox_security_tests()
     print(f"SQL Sandbox Security Tests: {sandbox_res['passed']}/{sandbox_res['total']} Passed")
+
+    # Run Query Cache tests
+    cache_res = run_query_cache_tests()
+    print(f"Query Cache & Invalidation Tests: {cache_res['passed']}/{cache_res['total']} Passed")
     print("=" * 70)
 
-    return passed_count == total_count and sandbox_res["all_passed"]
+    return passed_count == total_count and sandbox_res["all_passed"] and cache_res["all_passed"]
 
 
 if __name__ == "__main__":
@@ -188,3 +276,4 @@ if __name__ == "__main__":
         pass
     success = print_cli_test_report()
     sys.exit(0 if success else 1)
+

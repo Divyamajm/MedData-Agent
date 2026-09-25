@@ -1,4 +1,4 @@
-# 📊 Scientific Evaluation Methodology & Benchmark Results
+# 📊 Reproducible Evaluation Methodology & Benchmark Results
 
 ## Benchmark Dataset Composition (290 Labeled Test Cases)
 

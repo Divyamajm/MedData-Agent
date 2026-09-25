@@ -60,3 +60,36 @@ def test_hybrid_parser_deterministic_mode():
     assert res.filters.max_fee == 1500
     assert "Deterministic" in engine
     assert latency < 25.0
+
+
+@pytest.mark.parametrize("prompt,expected_max_price", [
+    ("Find a 3BHK flat 60k", 60000),
+    ("Apartment for 60 thousand in Indiranagar", 60000),
+    ("3BHK flat 60K budget", 60000),
+    ("Find a 3BHK flat under ₹60k", 60000),
+    ("Flat in Koramangala 60 thousand rupees", 60000),
+    ("Find a 3BHK flat under 60000 near top schools", 60000),
+    ("Find a 3BHK flat in Koramangala under ₹60000", 60000),
+    ("Find a 2BHK flat under ₹45,000", 45000),
+    ("Gated community villa in Hyderabad under 1 lakh", 100000),
+    ("Villa in Jubilee Hills Hyderabad under 1.5 lakh", 150000),
+    ("Flat in Whitefield 50k/month", 50000),
+    ("Apartment in Bandra for 75 thousand INR", 75000),
+    ("Flat with 60000 rent", 60000),
+])
+def test_housing_price_parsing(prompt, expected_max_price):
+    res = classify_intent_and_extract_entities(prompt)
+    assert res.domain == DomainType.REAL_ESTATE
+    assert res.housing_filters.max_price == expected_max_price
+
+
+@pytest.mark.parametrize("prompt,expected_max_price", [
+    ("Apartment near hospital within 1.5 miles", None),
+    ("Safest neighborhood with low crime index < 20", None),
+    ("House with school rating above 8 in Delhi NCR", None),
+])
+def test_housing_price_non_price_numerical_isolation(prompt, expected_max_price):
+    res = classify_intent_and_extract_entities(prompt)
+    assert res.domain == DomainType.REAL_ESTATE
+    assert res.housing_filters.max_price == expected_max_price
+

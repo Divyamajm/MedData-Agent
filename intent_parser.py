@@ -237,17 +237,27 @@ def parse_housing_constraints(prompt: str) -> HousingSearchFilters:
     prompt_lower = prompt.lower()
     filters = HousingSearchFilters()
 
-    # 1. Price extraction (₹, Rs, Lakhs, k, $, or raw numbers)
-    lakh_match = re.search(r"(?:under|below|less than|budget|max|<=|<|\$|₹|rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|l)\b", prompt_lower)
-    k_match = re.search(r"(?:under|below|less than|budget|max|<=|<|\$|₹|rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:k|thousand)\b", prompt_lower)
-    num_match = re.search(r"(?:under|less than|max|budget|below|up to|\$|₹|rs\.?)\s*(\d{3,7})", prompt_lower)
+    # 1. Price extraction (₹, Rs, Lakhs, k, $, commas, multi-word or raw numbers)
+    # 1a. Lakhs / Lacs (e.g. 1.5 lakh, 2 lakhs, ₹1 lakh, 50 lacs, under 1.5 lakh)
+    lakh_match = re.search(r"(?:under|below|less than|budget|max|<=|<|up to|around|\$|₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|lacs|lac|\bl\b)(?:\s*(?:rupees|rs\.?|inr|bucks))?\b", prompt_lower)
+    # 1b. Thousands / K (e.g. 60k, 60 thousand, 60K, ₹60k, 60 thousand rupees, 60k inr, 60k/mo)
+    k_match = re.search(r"(?:under|below|less than|budget|max|<=|<|up to|around|approx|for|at|rent|price|\$|₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(?:k|thousand|thousands)\b(?:\s*(?:rupees|rs\.?|inr|per month|/mo|/month|pm|rent|budget))?", prompt_lower)
+    # 1c. Explicit Currency Symbol / Keyword with formatted numbers (e.g. ₹60,000, Rs 45000, 60000 INR, 60000 rupees)
+    curr_prefix_match = re.search(r"(?:₹|rs\.?|inr|\$)\s*(\d{1,3}(?:,\d{3})+|\d{4,8})\b", prompt_lower)
+    curr_suffix_match = re.search(r"\b(\d{1,3}(?:,\d{3})+|\d{4,8})\s*(?:rupees|rs\.?|inr|per month|/mo|/month|pm|rent|budget|price)\b", prompt_lower)
+    # 1d. Standard comparison prefix with numbers (e.g. under 60000, below 45,000, budget 50000)
+    num_match = re.search(r"(?:under|less than|max|budget|below|up to|around|for|at|<=|<)\s*(?:₹|rs\.?|inr|\$)?\s*(\d{1,3}(?:,\d{3})+|\d{3,7})\b", prompt_lower)
 
     if lakh_match:
         filters.max_price = int(float(lakh_match.group(1)) * 100000)
     elif k_match:
         filters.max_price = int(float(k_match.group(1)) * 1000)
+    elif curr_prefix_match:
+        filters.max_price = int(curr_prefix_match.group(1).replace(",", ""))
+    elif curr_suffix_match:
+        filters.max_price = int(curr_suffix_match.group(1).replace(",", ""))
     elif num_match:
-        filters.max_price = int(num_match.group(1))
+        filters.max_price = int(num_match.group(1).replace(",", ""))
 
     # 2. Crime index extraction
     if re.search(r"\b(very safe|ultra safe|safest|lowest crime|minimal crime)\b", prompt_lower):
@@ -562,7 +572,7 @@ def parse_user_intent_hybrid(
 ) -> Tuple[IntentClassificationResult, str, float]:
     """
     Dual-Engine Dispatcher:
-    - engine='deterministic': High-speed (<3ms) regex & dictionary AST classification.
+    - engine='deterministic': High-speed (<0.2ms) regex & dictionary pattern classification.
     - engine='llm': Bounded LLM structured JSON intent parsing.
     - engine='auto': Attempts LLM parsing if API key is present, falls back cleanly to deterministic.
     

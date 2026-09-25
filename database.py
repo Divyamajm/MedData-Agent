@@ -204,6 +204,12 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
     conn = get_connection(db_path)
     c = conn.cursor()
 
+    if force_reset:
+        c.execute("DROP TABLE IF EXISTS Appointments")
+        c.execute("DROP TABLE IF EXISTS Doctors")
+        c.execute("DROP TABLE IF EXISTS Properties")
+        c.execute("DROP TABLE IF EXISTS Specialties")
+
     # 1. Create Doctors Table (with Geo Coordinates)
     c.execute("""
         CREATE TABLE IF NOT EXISTS Doctors (
@@ -222,28 +228,13 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
         )
     """)
 
-    # Verify column existence and auto-upgrade if needed
+    # Non-destructive additive migration for Doctors
     c.execute("PRAGMA table_info(Doctors)")
     existing_cols = [col[1] for col in c.fetchall()]
     if "latitude" not in existing_cols:
-        c.execute("DROP TABLE IF EXISTS Doctors")
-        c.execute("""
-            CREATE TABLE Doctors (
-                id INTEGER PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL,
-                specialty TEXT NOT NULL,
-                primary_surgery TEXT NOT NULL,
-                surgery_success_rate REAL NOT NULL,
-                satisfaction_score INTEGER NOT NULL,
-                distance_miles REAL NOT NULL,
-                consultation_fee INTEGER NOT NULL,
-                is_available_today TEXT NOT NULL,
-                next_available_date TEXT NOT NULL,
-                latitude REAL DEFAULT 37.7749,
-                longitude REAL DEFAULT -122.4194
-            )
-        """)
-        force_reset = True
+        c.execute("ALTER TABLE Doctors ADD COLUMN latitude REAL DEFAULT 37.7749;")
+    if "longitude" not in existing_cols:
+        c.execute("ALTER TABLE Doctors ADD COLUMN longitude REAL DEFAULT -122.4194;")
 
     # 2. Create Specialties Metadata Table
     c.execute("""
@@ -274,27 +265,11 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
         )
     """)
 
+    # Non-destructive additive migration for Appointments
     c.execute("PRAGMA table_info(Appointments)")
     app_cols = [col[1] for col in c.fetchall()]
     if "specialty" not in app_cols:
-        c.execute("DROP TABLE IF EXISTS Appointments")
-        c.execute("""
-            CREATE TABLE Appointments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                doctor_id INTEGER NOT NULL,
-                doctor_name TEXT NOT NULL,
-                specialty TEXT NOT NULL,
-                patient_name TEXT NOT NULL,
-                patient_email TEXT NOT NULL,
-                appointment_date TEXT NOT NULL,
-                time_slot TEXT NOT NULL,
-                status TEXT NOT NULL,
-                symptoms_reason TEXT,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (doctor_id) REFERENCES Doctors(id)
-            )
-        """)
-        force_reset = True
+        c.execute("ALTER TABLE Appointments ADD COLUMN specialty TEXT DEFAULT 'General';")
 
     # 4. Create UrbanLocate Properties / Housing Table
     c.execute("""
@@ -319,32 +294,13 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
         )
     """)
 
+    # Non-destructive additive migration for Properties
     c.execute("PRAGMA table_info(Properties)")
     prop_cols = [col[1] for col in c.fetchall()]
     if "city" not in prop_cols:
-        c.execute("DROP TABLE IF EXISTS Properties")
-        c.execute("""
-            CREATE TABLE Properties (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                city TEXT NOT NULL,
-                neighborhood TEXT NOT NULL,
-                property_type TEXT NOT NULL,
-                price_per_month INTEGER NOT NULL,
-                bedrooms INTEGER NOT NULL,
-                bathrooms REAL NOT NULL,
-                sqft INTEGER NOT NULL,
-                crime_index_score INTEGER NOT NULL,
-                school_rating REAL NOT NULL,
-                hospital_dist_miles REAL NOT NULL,
-                transit_dist_miles REAL NOT NULL,
-                market_dist_miles REAL NOT NULL,
-                livability_score INTEGER NOT NULL,
-                latitude REAL NOT NULL,
-                longitude REAL NOT NULL
-            )
-        """)
-        force_reset = True
+        c.execute("ALTER TABLE Properties ADD COLUMN city TEXT DEFAULT 'Bengaluru';")
+    if "livability_score" not in prop_cols:
+        c.execute("ALTER TABLE Properties ADD COLUMN livability_score INTEGER DEFAULT 80;")
 
     # 5. Performance Indexes
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_specialty ON Doctors(specialty);")
@@ -354,6 +310,7 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_satisfaction ON Doctors(satisfaction_score);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_doctors_success ON Doctors(surgery_success_rate);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_appointments_slot ON Appointments(doctor_id, appointment_date, time_slot);")
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_confirmed_appointment ON Appointments(doctor_id, appointment_date, time_slot) WHERE status = 'CONFIRMED';")
     c.execute("CREATE INDEX IF NOT EXISTS idx_properties_city ON Properties(city);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_properties_price ON Properties(price_per_month);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_properties_crime ON Properties(crime_index_score);")
@@ -471,14 +428,16 @@ def init_database(db_path: str = DB_PATH, force_reset: bool = False) -> None:
 def check_appointment_conflict(doctor_id: int, appointment_date: str, time_slot: str, db_path: str = DB_PATH) -> bool:
     """Checks if a specific doctor already has a confirmed booking for date & time slot."""
     conn = get_connection(db_path)
-    c = conn.cursor()
-    c.execute("""
-        SELECT COUNT(*) FROM Appointments 
-        WHERE doctor_id = ? AND appointment_date = ? AND time_slot = ? AND status = 'CONFIRMED'
-    """, (doctor_id, appointment_date, time_slot))
-    count = c.fetchone()[0]
-    conn.close()
-    return count > 0
+    try:
+        c = conn.cursor()
+        c.execute("""
+            SELECT COUNT(*) FROM Appointments 
+            WHERE doctor_id = ? AND appointment_date = ? AND time_slot = ? AND status = 'CONFIRMED'
+        """, (doctor_id, appointment_date, time_slot))
+        count = c.fetchone()[0]
+        return count > 0
+    finally:
+        conn.close()
 
 
 def book_appointment(
@@ -490,51 +449,59 @@ def book_appointment(
     symptoms_reason: str = "General Consultation",
     db_path: str = DB_PATH
 ) -> Dict[str, Any]:
-    """Records an appointment in SQLite with strict double-booking conflict verification."""
+    """
+    Records an appointment in SQLite with atomic collision prevention and double-booking verification.
+    Guards against TOCTOU race conditions via DB unique constraint + transaction rollback.
+    """
     conn = get_connection(db_path)
-    c = conn.cursor()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT name, specialty FROM Doctors WHERE id = ?", (doctor_id,))
+        doc = c.fetchone()
+        if not doc:
+            return {"success": False, "error": f"Doctor ID {doctor_id} not found."}
 
-    c.execute("SELECT name, specialty FROM Doctors WHERE id = ?", (doctor_id,))
-    doc = c.fetchone()
-    if not doc:
-        conn.close()
-        return {"success": False, "error": f"Doctor ID {doctor_id} not found."}
+        doc_name = doc["name"]
+        specialty = doc["specialty"]
 
-    doc_name = doc["name"]
-    specialty = doc["specialty"]
+        # Pre-check for immediate user feedback
+        if check_appointment_conflict(doctor_id, appointment_date, time_slot, db_path=db_path):
+            return {
+                "success": False, 
+                "error": f"Time slot {time_slot} on {appointment_date} is already booked for {doc_name}. Please choose another time."
+            }
 
-    # Conflict check
-    if check_appointment_conflict(doctor_id, appointment_date, time_slot, db_path=db_path):
-        conn.close()
+        created_at = datetime.now().isoformat()
+
+        try:
+            c.execute("""
+                INSERT INTO Appointments (
+                    doctor_id, doctor_name, specialty, patient_name, patient_email, appointment_date, 
+                    time_slot, status, symptoms_reason, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', ?, ?)
+            """, (doctor_id, doc_name, specialty, patient_name, patient_email, appointment_date, time_slot, symptoms_reason, created_at))
+            booking_id = c.lastrowid
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            return {
+                "success": False,
+                "error": f"Collision detected: Time slot {time_slot} on {appointment_date} was just booked by another client for {doc_name}."
+            }
+
         return {
-            "success": False, 
-            "error": f"Time slot {time_slot} on {appointment_date} is already booked for {doc_name}. Please choose another time."
+            "success": True,
+            "booking_id": booking_id,
+            "doctor_name": doc_name,
+            "specialty": specialty,
+            "patient_name": patient_name,
+            "patient_email": patient_email,
+            "appointment_date": appointment_date,
+            "time_slot": time_slot,
+            "symptoms_reason": symptoms_reason
         }
-
-    created_at = datetime.now().isoformat()
-
-    c.execute("""
-        INSERT INTO Appointments (
-            doctor_id, doctor_name, specialty, patient_name, patient_email, appointment_date, 
-            time_slot, status, symptoms_reason, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', ?, ?)
-    """, (doctor_id, doc_name, specialty, patient_name, patient_email, appointment_date, time_slot, symptoms_reason, created_at))
-
-    booking_id = c.lastrowid
-    conn.commit()
-    conn.close()
-
-    return {
-        "success": True,
-        "booking_id": booking_id,
-        "doctor_name": doc_name,
-        "specialty": specialty,
-        "patient_name": patient_name,
-        "patient_email": patient_email,
-        "appointment_date": appointment_date,
-        "time_slot": time_slot,
-        "symptoms_reason": symptoms_reason
-    }
+    finally:
+        conn.close()
 
 
 def get_all_appointments(db_path: str = DB_PATH) -> List[Dict[str, Any]]:

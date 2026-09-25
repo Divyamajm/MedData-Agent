@@ -24,6 +24,10 @@ COPY . .
 # Initialize and seed the SQLite database
 RUN python -c "from database import init_database; init_database(force_reset=True)"
 
+# Create non-root user for container security
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 # Expose ports: 8501 (Streamlit Frontend) and 8000 (FastAPI Backend)
 EXPOSE 8501 8000
 
