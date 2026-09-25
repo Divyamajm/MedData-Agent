@@ -121,9 +121,9 @@ Benchmarked on 18 representative clinical discovery queries (10 unique initial q
 
 | Execution Mode | Total Pipeline Time (18 Queries) | Avg Latency on Repeated Queries | Cache Hit Rate |
 |---|:---:|:---:|:---:|
-| **Caching Disabled (Baseline)** | **22.926 ms** | **0.529 ms / query** | 0.0% (0/7) |
-| **Caching Enabled (LRU + Invalidation)** | **8.597 ms** | **0.044 ms / query** | **100.0% (7/7)** |
-| **Measured Improvement** | **-62.5% Total Time** | **-91.6% Latency (~12x speedup)** | **Sub-0.05ms Hits** |
+| **Caching Disabled (Baseline)** | **28.344 ms** | **0.573 ms / query** | 0.0% (0/7) |
+| **Caching Enabled (LRU + Invalidation)** | **11.246 ms** | **0.110 ms / query** | **100.0% (7/7)** |
+| **Measured Improvement** | **-60.3% Total Time** | **-80.8% Latency (~5.2x speedup)** | **Sub-0.1ms Hits** |
 
 *To reproduce these numbers locally, run `python benchmark.py`.*
 
