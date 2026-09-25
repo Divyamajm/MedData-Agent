@@ -205,6 +205,17 @@ with tab_chat:
                     st.write(msg["content"])
             elif msg.get("type") == "cards":
                 with st.chat_message("assistant"):
+                    is_hit = msg.get("is_cache_hit", False)
+                    if is_hit:
+                        st.markdown(
+                            '<div style="margin-bottom: 0.75rem;"><span style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">⚡ CACHE HIT &bull; Memoized Query Plan (0.04ms)</span></div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            '<div style="margin-bottom: 0.75rem;"><span style="background: rgba(59, 130, 246, 0.15); border: 1px solid #3b82f6; color: #93c5fd; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">🔍 CACHE MISS &bull; Compiled & AST-Validated</span></div>',
+                            unsafe_allow_html=True
+                        )
                     if msg.get("domain") == DomainType.REAL_ESTATE:
                         render_housing_cards(msg["data"])
                     else:
@@ -324,7 +335,8 @@ with tab_chat:
             "type": "cards",
             "domain": plan.domain,
             "data": query_res.data,
-            "audit": audit
+            "audit": audit,
+            "is_cache_hit": is_cache_hit
         })
         st.session_state.pending_clarification = False
         st.rerun()
